@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+dist/
+.build/
+.vs/
+.idea/
+*.user
+*.suo
+# Local usage logs and credentials must never be committed.
+.codex/
+auth.json
+settings.json
+*.jsonl
+.env
+.env.*

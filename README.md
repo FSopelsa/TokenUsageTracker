@@ -12,11 +12,10 @@ Double-click **Launch.cmd**. On the first launch it runs checks and builds the p
 
 Once built, `dist/CodexUsageWidget.exe` runs by itself on Windows 10/11 x64 without an installed .NET runtime. You can copy that file to another PC or create a normal Windows shortcut to it. Windows may show SmartScreen for this unsigned app.
 
-## Use on your other PC with GitHub
+## Use on your PC with GitHub
 
-1. Push the source folder to your GitHub repository. Generated binaries, settings, and local Codex data are ignored.
-2. On the other PC, install Git and the .NET 10 SDK, clone your repository, then double-click **Launch.cmd**.
-3. For updates: quit the widget from its menu, run `git pull`, then double-click **Build.cmd** followed by **Launch.cmd**.
+1. On the target PC, install Git and the .NET 10 SDK, clone this repository, then double-click **Launch.cmd**.
+2. For updates: quit the widget from its menu, run `git pull`, then double-click **Build.cmd** followed by **Launch.cmd**.
 
 The included GitHub Actions workflow also builds and uploads `CodexUsageWidget-win-x64` on every push. Download and extract that artifact from the repository's **Actions** tab to run the executable without installing the SDK. The workflow must have run successfully first; this is an Actions artifact, not a GitHub Release.
 

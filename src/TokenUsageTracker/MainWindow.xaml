@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Codex Usage" Width="316" Height="348" WindowStyle="None"
-        ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="CanResize" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False" FontFamily="Segoe UI" Foreground="#EDF2F6"
         UseLayoutRounding="True" PreviewKeyDown="OnKeyDown">
   <Window.Resources>
@@ -38,6 +38,7 @@
       </Setter.Value></Setter>
     </Style>
   </Window.Resources>
+  <Grid>
   <Border x:Name="Card" Margin="9" Padding="19,14,19,16" CornerRadius="18" Background="#171E26" BorderBrush="#36414C" BorderThickness="1">
     <Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.3" /></Border.Effect>
       <Grid x:Name="LayoutGrid">
@@ -51,7 +52,7 @@
           <Border Width="25" Height="25" Background="#BEF078" CornerRadius="7" Margin="0,0,9,0">
             <TextBlock Text="&gt;_" Foreground="#171E26" FontFamily="Consolas" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
           </Border>
-          <TextBlock Text="Codex" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" />
+          <TextBlock x:Name="ProviderText" Text="Codex" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" />
         </StackPanel>
         <CheckBox x:Name="AutoResumeToggle" Grid.Column="1" Content="Auto-resume" VerticalAlignment="Center" HorizontalAlignment="Right"
                   Margin="4,0,4,0" FontSize="9" Foreground="#EDF2F6" Cursor="Hand"
@@ -72,20 +73,22 @@
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="0" /></Grid.ColumnDefinitions>
       <StackPanel x:Name="PrimaryPanel" Grid.Row="0" Margin="0,9,0,0">
-        <Grid>
+        <Grid x:Name="PrimaryHeading">
+          <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="0" /></Grid.RowDefinitions>
           <TextBlock x:Name="PrimaryLabel" Text="5-hour window" FontSize="12" Foreground="#ACB8C5" VerticalAlignment="Center" />
           <TextBlock x:Name="PrimaryValue" Text="—" FontSize="35" FontWeight="SemiBold" HorizontalAlignment="Right" />
         </Grid>
         <ProgressBar x:Name="PrimaryBar" Margin="0,5,0,0" AutomationProperties.Name="Primary window remaining percent" />
-        <TextBlock x:Name="PrimaryReset" Text="Waiting for Codex" FontSize="11" Foreground="#8F9FAF" Margin="0,7,0,0" />
+        <TextBlock x:Name="PrimaryReset" Text="Waiting for Codex" FontSize="11" Foreground="#8F9FAF" Margin="0,7,0,0" TextTrimming="CharacterEllipsis" />
       </StackPanel>
       <StackPanel x:Name="SecondaryPanel" Grid.Row="1" Margin="0,16,0,0">
-        <Grid>
+        <Grid x:Name="SecondaryHeading">
+          <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="0" /></Grid.RowDefinitions>
           <TextBlock x:Name="SecondaryLabel" Text="Weekly window" FontSize="12" Foreground="#ACB8C5" VerticalAlignment="Center" />
           <TextBlock x:Name="SecondaryValue" Text="—" FontSize="25" FontWeight="SemiBold" HorizontalAlignment="Right" />
         </Grid>
         <ProgressBar x:Name="SecondaryBar" Margin="0,7,0,0" AutomationProperties.Name="Secondary window remaining percent" />
-        <TextBlock x:Name="SecondaryReset" Text="Waiting for Codex" FontSize="11" Foreground="#8F9FAF" Margin="0,7,0,0" />
+        <TextBlock x:Name="SecondaryReset" Text="Waiting for Codex" FontSize="11" Foreground="#8F9FAF" Margin="0,7,0,0" TextTrimming="CharacterEllipsis" />
       </StackPanel>
       </Grid>
       <Border x:Name="Footer" Grid.Row="5" BorderBrush="#303A45" BorderThickness="0,1,0,0" Padding="0,11,0,0" Margin="0,14,0,0">
@@ -100,4 +103,20 @@
       </Border>
     </Grid>
   </Border>
+  <Thumb x:Name="ResizeHandle" Width="20" Height="20" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8"
+         Cursor="SizeNWSE" Focusable="True" IsTabStop="True" DragDelta="ResizeDragged" DragCompleted="ResizeCompleted"
+         KeyDown="ResizeKeyDown" ToolTip="Drag to resize. Focus here and use arrow keys to resize."
+         AutomationProperties.Name="Resize widget">
+    <Thumb.Template>
+      <ControlTemplate TargetType="Thumb">
+        <Border x:Name="Grip" Background="Transparent" CornerRadius="3">
+          <Path Data="M 5,15 L 15,5 M 10,15 L 15,10" Stroke="#9BA9B7" StrokeThickness="1.3" />
+        </Border>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Grip" Property="Background" Value="#364452" /></Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate>
+    </Thumb.Template>
+  </Thumb>
+  </Grid>
 </Window>

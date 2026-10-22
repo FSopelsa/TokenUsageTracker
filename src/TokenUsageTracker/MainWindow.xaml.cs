@@ -33,10 +33,13 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        if (settings.Provider is not ("Codex" or "Claude")) settings.Provider = "Codex";
         if (settings.ResumeTarget is not ("Desktop" or "CLI")) settings.ResumeTarget = "Desktop";
         AutoResumeToggle.IsChecked = settings.AutoResume;
         Topmost = settings.AlwaysOnTop;
         SetCompact(settings.CompactMode, save: false);
+        UpdateProvider();
+        SizeChanged += (_, _) => UpdateResponsiveLayout();
         UpdatePin();
         tray = new Forms.NotifyIcon
         {
@@ -67,37 +70,44 @@ public partial class MainWindow : Window
     {
         if (reading) return;
         reading = true;
-        string folder = settings.DataFolder;
+        string provider = settings.Provider;
+        bool claude = provider == "Claude";
+        string folder = claude ? ClaudeUsage.ConfigFolder : settings.DataFolder;
+        bool Current() => provider == settings.Provider && folder == (claude ? ClaudeUsage.ConfigFolder : settings.DataFolder);
         try
         {
             LiveUsage? live = null;
             string? error = null;
             try
             {
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
-                timeout.CancelAfter(TimeSpan.FromSeconds(10));
-                using var client = await CodexClient.ConnectAsync(folder, desktop: false, timeout.Token);
-                live = await client.ReadUsageAsync(timeout.Token);
-                if (folder == settings.DataFolder) lastLive = live;
+                if (!claude)
+                {
+                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+                    timeout.CancelAfter(TimeSpan.FromSeconds(10));
+                    using var client = await CodexClient.ConnectAsync(folder, desktop: false, timeout.Token);
+                    live = await client.ReadUsageAsync(timeout.Token);
+                    if (Current()) lastLive = live;
+                }
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or OperationCanceledException
                 or System.ComponentModel.Win32Exception or System.Text.Json.JsonException or InvalidOperationException)
             {
                 error = e is OperationCanceledException ? "Live usage timed out. Check Codex sign-in and connection." : e.Message;
             }
-            if (lifetime.IsCancellationRequested || folder != settings.DataFolder) return;
-            var result = live is not null ? new UsageResult(live.Snapshot, null)
+            if (lifetime.IsCancellationRequested || !Current()) return;
+            var result = claude ? await Task.Run(() => ClaudeUsage.Read(folder))
+                : live is not null ? new UsageResult(live.Snapshot, null)
                 : lastLive is not null ? new UsageResult(lastLive.Snapshot, error)
                 : await Task.Run(() => reader.Read(folder));
-            if (folder != settings.DataFolder || lifetime.IsCancellationRequested) return;
+            if (!Current() || lifetime.IsCancellationRequested) return;
             var now = DateTimeOffset.Now;
             var snapshot = result.Snapshot;
             ShowWindow(snapshot?.Primary, PrimaryLabel, PrimaryValue, PrimaryBar, PrimaryReset, now);
             ShowWindow(snapshot?.Secondary, SecondaryLabel, SecondaryValue, SecondaryBar, SecondaryReset, now);
-            PlanText.Text = snapshot?.Plan?.Replace('_', ' ').ToUpperInvariant() ?? "LOCAL";
+            PlanText.Text = snapshot?.Plan?.Replace('_', ' ').ToUpperInvariant() ?? (claude ? "CLAUDE" : "LOCAL");
             bool stale = snapshot is not null && now - snapshot.Timestamp > TimeSpan.FromMinutes(15);
-            string source = live is not null ? "Live account usage" : lastLive is not null ? "Last live reading" : "Local snapshot";
-            string status = snapshot is null ? "Waiting for plan usage"
+            string source = claude ? "Claude Code snapshot" : live is not null ? "Live account usage" : lastLive is not null ? "Last live reading" : "Local snapshot";
+            string status = snapshot is null ? claude ? "Waiting for Claude Code · see Options" : "Waiting for plan usage"
                 : snapshot.Timestamp > now.AddMinutes(5) ? "Check your computer clock"
                 : $"{source} · {Age(now - snapshot.Timestamp)} ago";
             StatusText.Text = settings.CompactMode && snapshot is not null
@@ -106,31 +116,40 @@ public partial class MainWindow : Window
             string recovery;
             try
             {
-                await resume.TickAsync(live, lifetime.Token);
-                recovery = resume.Status;
-                if (settings.AutoResume && settings.ResumeTarget == "Desktop" && !File.Exists(CodexClient.DesktopSocket(folder)))
-                    recovery = "Desktop connection unavailable: no shared control socket. CLI mode is available in Options.";
+                if (claude) recovery = "Claude usage display only · auto-resume unavailable";
+                else
+                {
+                    await resume.TickAsync(live, lifetime.Token);
+                    recovery = resume.Status;
+                    if (settings.AutoResume && settings.ResumeTarget == "Desktop" && !File.Exists(CodexClient.DesktopSocket(folder)))
+                        recovery = "Desktop connection unavailable: no shared control socket. CLI mode is available in Options.";
+                }
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or OperationCanceledException)
             { recovery = "Recovery paused: " + e.Message; }
-            if (lifetime.IsCancellationRequested) return;
-            SourceText.Text = settings.AutoResume ? recovery : "Auto-resume off · refreshes every 15s";
+            if (lifetime.IsCancellationRequested || !Current()) return;
+            SourceText.Text = claude ? "From Claude Code · refreshes every 15s" : settings.AutoResume ? recovery : "Auto-resume off · refreshes every 15s";
             SourceText.TextTrimming = TextTrimming.CharacterEllipsis;
             SourceText.ToolTip = recovery;
             string details = $"{source}\n{error ?? result.Error}\n{recovery}\n{folder}";
+            Card.ToolTip = details;
             StatusText.ToolTip = AutoResumeToggle.ToolTip = details;
-            if (settings.AutoResume && settings.CompactMode)
+            if (!claude && settings.AutoResume && settings.CompactMode)
                 StatusText.Text = $"{PlanText.Text} · " + (recovery.StartsWith("Desktop connection unavailable", StringComparison.Ordinal)
                     ? "Desktop connection unavailable" : $"{source} · {resume.PendingCount} pending");
             ToolTip = null;
             tray.Text = snapshot?.Primary is { } w && !w.IsExpired(now)
-                ? $"Codex: {w.Remaining:0.#}% left — {Age(now - snapshot.Timestamp)} ago"
-                : "Codex Usage — open widget for status";
+                ? $"{provider}: {w.Remaining:0.#}% left — {Age(now - snapshot.Timestamp)} ago"
+                : $"{provider} Usage — open widget for status";
         }
-        finally { reading = false; }
+        finally
+        {
+            reading = false;
+            if (provider != settings.Provider && !lifetime.IsCancellationRequested) _ = RefreshAsync();
+        }
     }
 
-    private static void ShowWindow(UsageWindow? w, TextBlock label, TextBlock value, ProgressBar bar, TextBlock reset, DateTimeOffset now)
+    private void ShowWindow(UsageWindow? w, TextBlock label, TextBlock value, ProgressBar bar, TextBlock reset, DateTimeOffset now)
     {
         if (w is null)
         {
@@ -144,7 +163,7 @@ public partial class MainWindow : Window
         value.Text = expired ? "—" : w.Remaining.ToString("0.#", CultureInfo.CurrentCulture) + "%";
         value.Foreground = bar.Foreground = color;
         bar.Value = expired ? 0 : w.Remaining;
-        reset.Text = expired ? "Reset passed · waiting for Codex"
+        reset.Text = expired ? "Reset passed · waiting for " + settings.Provider
             : w.ResetsAt is { } time ? "Resets in " + Countdown(time - now) : "Reset time unavailable";
         reset.ToolTip = w.ResetsAt?.ToLocalTime().ToString("f");
     }
@@ -177,6 +196,8 @@ public partial class MainWindow : Window
         });
         if (!reachable)
         {
+            Width = Math.Max(MinWidth, Math.Min(Width, SystemParameters.WorkArea.Width - 24));
+            Height = Math.Max(MinHeight, Math.Min(Height, SystemParameters.WorkArea.Height - 24));
             Left = SystemParameters.WorkArea.Right - Width - 24;
             Top = SystemParameters.WorkArea.Bottom - Height - 24;
         }
@@ -184,7 +205,10 @@ public partial class MainWindow : Window
 
     private void SaveSettings()
     {
+        if (!IsLoaded || WindowState != WindowState.Normal) return;
         settings.Left = Left; settings.Top = Top; settings.AlwaysOnTop = Topmost;
+        if (settings.CompactMode) { settings.CompactWidth = Width; settings.CompactHeight = Height; }
+        else { settings.FullWidth = Width; settings.FullHeight = Height; }
         if (!settings.Save()) { StatusText.Text = "Could not save preferences"; StatusText.ToolTip = "Check LocalAppData write permissions."; }
     }
 
@@ -194,14 +218,20 @@ public partial class MainWindow : Window
 
     private void SetCompact(bool compact, bool save)
     {
+        if (save) SaveSettings();
         settings.CompactMode = compact;
-        Width = compact ? 432 : 316;
-        Height = compact ? 162 : 348;
+        MinWidth = compact ? 240 : 280;
+        MinHeight = compact ? 120 : 348;
+        MaxWidth = Math.Max(MinWidth, SystemParameters.VirtualScreenWidth);
+        MaxHeight = Math.Max(MinHeight, SystemParameters.VirtualScreenHeight);
+        var size = settings.WindowSize(compact);
+        Width = Math.Clamp(size.Width, MinWidth, MaxWidth);
+        Height = Math.Clamp(size.Height, MinHeight, MaxHeight);
         Card.Margin = new Thickness(compact ? 6 : 9);
         Card.Padding = compact ? new Thickness(12, 6, 12, 6) : new Thickness(19, 14, 19, 16);
         PlanRow.Visibility = SourceText.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        PrimaryPanel.Margin = new Thickness(0, compact ? 5 : 9, compact ? 8 : 0, 0);
-        SecondaryPanel.Margin = new Thickness(compact ? 8 : 0, compact ? 5 : 16, 0, 0);
+        PrimaryPanel.Margin = new Thickness(0, compact ? 3 : 9, compact ? 8 : 0, 0);
+        SecondaryPanel.Margin = new Thickness(compact ? 8 : 0, compact ? 3 : 16, 0, 0);
         UsageGrid.RowDefinitions[1].Height = compact ? new GridLength(0) : GridLength.Auto;
         UsageGrid.ColumnDefinitions[1].Width = compact ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         Grid.SetRow(SecondaryPanel, compact ? 0 : 1);
@@ -220,7 +250,42 @@ public partial class MainWindow : Window
         AutomationProperties.SetName(ModeButton, ModeButton.ToolTip.ToString());
         ModeButton.Width = PinButton.Width = RefreshButton.Width = compact ? 26 : 28;
         ModeButton.Height = PinButton.Height = RefreshButton.Height = compact ? 24 : 28;
+        UpdateResponsiveLayout();
         if (save) SaveSettings();
+    }
+
+    private void UpdateResponsiveLayout()
+    {
+        bool compact = settings.CompactMode;
+        bool narrow = Width < (compact ? 360 : 310);
+        bool stacked = compact && narrow;
+        AutoResumeToggle.Visibility = narrow || settings.Provider == "Claude" ? Visibility.Collapsed : Visibility.Visible;
+        PinButton.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
+        Footer.Visibility = compact && Height < 160 ? Visibility.Collapsed : Visibility.Visible;
+        PrimaryHeading.RowDefinitions[1].Height = SecondaryHeading.RowDefinitions[1].Height = stacked ? GridLength.Auto : new GridLength(0);
+        Grid.SetRow(PrimaryValue, stacked ? 1 : 0);
+        Grid.SetRow(SecondaryValue, stacked ? 1 : 0);
+        PrimaryValue.HorizontalAlignment = SecondaryValue.HorizontalAlignment = stacked ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+        PrimaryValue.FontSize = stacked ? 22 : compact ? 26 : 35;
+        SecondaryValue.FontSize = compact ? 22 : 25;
+        Card.Padding = compact ? new Thickness(narrow ? 8 : 12, narrow ? 4 : 6, narrow ? 8 : 12, narrow ? 4 : 6) : new Thickness(19, 14, 19, 16);
+    }
+
+    private void ResizeWindow(double horizontal, double vertical)
+    {
+        Width = Math.Clamp(Width + horizontal, MinWidth, MaxWidth);
+        Height = Math.Clamp(Height + vertical, MinHeight, MaxHeight);
+    }
+
+    private void ResizeDragged(object sender, DragDeltaEventArgs e) => ResizeWindow(e.HorizontalChange, e.VerticalChange);
+    private void ResizeCompleted(object sender, DragCompletedEventArgs e) => SaveSettings();
+    private void ResizeKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Left or Key.Right or Key.Up or Key.Down)) return;
+        ResizeWindow(e.Key == Key.Left ? -10 : e.Key == Key.Right ? 10 : 0,
+            e.Key == Key.Up ? -10 : e.Key == Key.Down ? 10 : 0);
+        SaveSettings();
+        e.Handled = true;
     }
 
     private void TogglePin(object sender, RoutedEventArgs e) { Topmost = !Topmost; UpdatePin(); SaveSettings(); }
@@ -233,7 +298,7 @@ public partial class MainWindow : Window
 
     private void ConfigureResume()
     {
-        try { resume.Configure(settings.AutoResume, settings.ResumeTarget, settings.DataFolder, DateTimeOffset.UtcNow); }
+        try { resume.Configure(settings.Provider == "Codex" && settings.AutoResume, settings.ResumeTarget, settings.DataFolder, DateTimeOffset.UtcNow); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             settings.AutoResume = false; AutoResumeToggle.IsChecked = false;
@@ -245,27 +310,85 @@ public partial class MainWindow : Window
     private async void RefreshClicked(object sender, RoutedEventArgs e) => await RefreshAsync();
     private void OpenMenu(object sender, RoutedEventArgs e) => ShowMenu();
 
+    private void UpdateProvider()
+    {
+        Title = settings.Provider + " Usage";
+        ProviderText.Text = settings.Provider;
+        RefreshButton.ToolTip = settings.Provider == "Claude" ? "Reread Claude Code snapshot (F5)" : "Refresh live usage (F5)";
+        AutomationProperties.SetName(RefreshButton, RefreshButton.ToolTip.ToString());
+        PrimaryLabel.Text = "5-hour window"; SecondaryLabel.Text = "Weekly window";
+        ShowWindow(null, PrimaryLabel, PrimaryValue, PrimaryBar, PrimaryReset, DateTimeOffset.Now);
+        ShowWindow(null, SecondaryLabel, SecondaryValue, SecondaryBar, SecondaryReset, DateTimeOffset.Now);
+        PlanText.Text = settings.Provider.ToUpperInvariant();
+        StatusText.Text = "Waiting for " + settings.Provider + " usage";
+        SourceText.Text = "Refreshes every 15s";
+        Card.ToolTip = null;
+        UpdateResponsiveLayout();
+    }
+
+    private void SetProvider(string provider)
+    {
+        if (settings.Provider == provider) return;
+        settings.Provider = provider;
+        lastLive = null;
+        UpdateProvider();
+        ConfigureResume();
+    }
+
+    private void SetupClaude()
+    {
+        try
+        {
+            bool configured = ClaudeUsage.ConfigureStatusLine(ClaudeUsage.ConfigFolder, Environment.ProcessPath!);
+            MessageBox.Show(this, configured
+                ? "Claude Code usage display is connected. Use Claude Code and wait for a response, then refresh the widget. Project or managed status-line settings may override this setup."
+                : "Your custom Claude status line was left unchanged. Forward its original JSON input to CodexUsageWidget.exe --claude-statusline and discard the bridge output. See the Claude setup section in README.md.",
+                "Claude usage setup", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or ArgumentException)
+        { MessageBox.Show(this, e.Message, "Claude setup failed", MessageBoxButton.OK, MessageBoxImage.Warning); }
+    }
+
     private void ShowMenu()
     {
         var menu = new ContextMenu();
         void Add(string text, Action action) { var item = new MenuItem { Header = text }; item.Click += (_, _) => action(); menu.Items.Add(item); }
-        Add("Refresh usage  (F5)", async () => await RefreshAsync());
-        var targets = new MenuItem { Header = "Resume target" };
-        foreach (string target in new[] { "Desktop", "CLI" })
+        var providers = new MenuItem { Header = "Usage provider" };
+        foreach (string provider in new[] { "Codex", "Claude" })
         {
-            var radio = new RadioButton { Content = target == "Desktop" ? "Codex Desktop" : "Terminal / CLI", GroupName = "ResumeTarget", IsChecked = settings.ResumeTarget == target, Margin = new Thickness(6) };
-            radio.Checked += (_, _) => { settings.ResumeTarget = target; ConfigureResume(); menu.IsOpen = false; };
-            targets.Items.Add(new MenuItem { Header = radio, StaysOpenOnClick = true });
+            var item = new MenuItem { Header = provider == "Claude" ? "Claude Code" : "Codex", IsCheckable = true, IsChecked = settings.Provider == provider };
+            item.Click += (_, _) => SetProvider(provider);
+            providers.Items.Add(item);
         }
-        menu.Items.Add(targets);
-        Add(Topmost ? "Turn off always on top" : "Turn on always on top", () => TogglePin(this, new RoutedEventArgs()));
-        Add("Open usage dashboard", () => Process.Start(new ProcessStartInfo("https://chatgpt.com/codex/settings/usage") { UseShellExecute = true }));
-        Add("Choose Codex data folder…", () =>
+        menu.Items.Add(providers);
+        Add("Refresh usage  (F5)", async () => await RefreshAsync());
+        if (settings.Provider == "Codex")
         {
-            var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Choose the Codex folder containing sessions (usually .codex)" };
-            if (dialog.ShowDialog(this) == true) { settings.CodexFolder = dialog.FolderName; lastLive = null; ConfigureResume(); }
-        });
-        Add("Use default Codex folder", () => { settings.CodexFolder = null; lastLive = null; ConfigureResume(); });
+            var autoResume = new MenuItem { Header = "Auto-resume", IsCheckable = true, IsChecked = settings.AutoResume };
+            autoResume.Click += (_, _) => AutoResumeToggle.IsChecked = autoResume.IsChecked;
+            menu.Items.Add(autoResume);
+            var targets = new MenuItem { Header = "Resume target" };
+            foreach (string target in new[] { "Desktop", "CLI" })
+            {
+                var radio = new RadioButton { Content = target == "Desktop" ? "Codex Desktop" : "Terminal / CLI", GroupName = "ResumeTarget", IsChecked = settings.ResumeTarget == target, Margin = new Thickness(6) };
+                radio.Checked += (_, _) => { settings.ResumeTarget = target; ConfigureResume(); menu.IsOpen = false; };
+                targets.Items.Add(new MenuItem { Header = radio, StaysOpenOnClick = true });
+            }
+            menu.Items.Add(targets);
+        }
+        else Add("Set up Claude usage…", SetupClaude);
+        Add(Topmost ? "Turn off always on top" : "Turn on always on top", () => TogglePin(this, new RoutedEventArgs()));
+        Add("Open usage dashboard", () => Process.Start(new ProcessStartInfo(settings.Provider == "Claude"
+            ? "https://claude.ai/settings/usage" : "https://chatgpt.com/codex/settings/usage") { UseShellExecute = true }));
+        if (settings.Provider == "Codex")
+        {
+            Add("Choose Codex data folder…", () =>
+            {
+                var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Choose the Codex folder containing sessions (usually .codex)" };
+                if (dialog.ShowDialog(this) == true) { settings.CodexFolder = dialog.FolderName; lastLive = null; ConfigureResume(); }
+            });
+            Add("Use default Codex folder", () => { settings.CodexFolder = null; lastLive = null; ConfigureResume(); });
+        }
         menu.Items.Add(new Separator());
         Add("Hide to tray  (Esc)", Hide);
         Add("Quit", Close);

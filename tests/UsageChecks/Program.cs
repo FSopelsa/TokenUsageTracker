@@ -2,7 +2,15 @@ using System.Text.Json;
 using TokenUsageTracker;
 
 if (args is ["--fake-codex", var scenario]) { ResumeChecks.Fake(scenario); return; }
+if (args is ["--claude-statusline"])
+{
+    Console.InputEncoding = Console.OutputEncoding = new System.Text.UTF8Encoding(false);
+    Environment.ExitCode = ClaudeUsage.RunStatusLine(Console.In, Console.Out, Console.Error, ClaudeUsage.ConfigFolder);
+    return;
+}
 
+try
+{
 int checks = 0;
 void Check(bool condition, string message)
 {
@@ -10,6 +18,24 @@ void Check(bool condition, string message)
     checks++;
     Console.WriteLine("PASS " + message);
 }
+
+var resizedSettings = JsonSerializer.Deserialize<WidgetSettings>("""
+    {"FullWidth":350,"FullHeight":400,"CompactWidth":240,"CompactHeight":120,"CompactMode":true}
+    """)!;
+var savedSettings = JsonSerializer.SerializeToElement(resizedSettings);
+Check(savedSettings.TryGetProperty("CompactWidth", out var compactWidth) && compactWidth.GetDouble() == 240
+    && savedSettings.TryGetProperty("CompactHeight", out var compactHeight) && compactHeight.GetDouble() == 120
+    && savedSettings.TryGetProperty("FullWidth", out var fullWidth) && fullWidth.GetDouble() == 350
+    && savedSettings.TryGetProperty("FullHeight", out var fullHeight) && fullHeight.GetDouble() == 400,
+    "Resized dimensions survive a settings round trip independently for both layouts");
+Check(resizedSettings.WindowSize(true) == (240, 120) && resizedSettings.WindowSize(false) == (350, 400),
+    "Switching layouts restores each layout's saved dimensions");
+var oldSettings = JsonSerializer.Deserialize<WidgetSettings>("{\"CompactMode\":true}")!;
+Check(oldSettings.WindowSize(true) == (432, 162) && oldSettings.WindowSize(false) == (316, 348),
+    "Older settings without dimensions retain the original default sizes");
+var invalidSize = new WidgetSettings { FullWidth = double.NaN, FullHeight = -1, CompactWidth = 0, CompactHeight = double.PositiveInfinity };
+Check(invalidSize.WindowSize(true) == (432, 162) && invalidSize.WindowSize(false) == (316, 348),
+    "Invalid saved dimensions fall back to usable window sizes");
 
 string Event(string timestamp, double percent = 6, string? id = "codex", bool primary = true) => JsonSerializer.Serialize(new
 {
@@ -65,6 +91,7 @@ try
 finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 
 await ResumeChecks.RunAsync(Check);
+await ClaudeChecks.RunAsync(Check);
 
 if (args.Contains("--live-rpc"))
 {
@@ -88,3 +115,9 @@ if (args.Contains("--live"))
     Console.WriteLine($"Cached scan: {clock.ElapsedMilliseconds}ms");
 }
 Console.WriteLine($"All {checks} checks passed.");
+}
+catch (Exception e)
+{
+    Console.Error.WriteLine(e);
+    Environment.ExitCode = 1;
+}

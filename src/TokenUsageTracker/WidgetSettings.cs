@@ -13,9 +13,21 @@ public sealed class WidgetSettings
     public double? Top { get; set; }
     public bool AlwaysOnTop { get; set; } = true;
     public bool CompactMode { get; set; }
+    public string Provider { get; set; } = "Codex";
+    public double? FullWidth { get; set; }
+    public double? FullHeight { get; set; }
+    public double? CompactWidth { get; set; }
+    public double? CompactHeight { get; set; }
     public bool AutoResume { get; set; }
     public string ResumeTarget { get; set; } = "Desktop";
     public string? CodexFolder { get; set; }
+
+    public (double Width, double Height) WindowSize(bool compact)
+    {
+        static double Valid(double? value, double fallback) => value is > 0 && double.IsFinite(value.Value) ? value.Value : fallback;
+        return compact ? (Valid(CompactWidth, 432), Valid(CompactHeight, 162))
+            : (Valid(FullWidth, 316), Valid(FullHeight, 348));
+    }
 
     [JsonIgnore]
     public string DataFolder => !string.IsNullOrWhiteSpace(CodexFolder) ? CodexFolder

@@ -4,14 +4,16 @@ A small desktop widget that shows the remaining usage in your Codex plan, includ
 
 <img src="docs/preview.png" alt="Preview of the Codex Usage Widget" width="316" />
 
-The percentages shown in this preview are illustrative. The widget reads usage recorded by Codex on the device where it runs.
+The percentages shown in this preview are illustrative. The widget queries current account usage through the installed Codex executable and labels older local snapshots when live usage is unavailable.
 
 ## Features
 
 - Draggable window with an optional always-on-top setting.
+- Switch between the full layout and a shorter, two-column compact layout; the selected layout is remembered.
 - Remaining usage and reset countdowns for both reported plan windows.
+- Optional automatic continuation of tasks interrupted by a usage limit, with saved **Codex Desktop** or **CLI** target settings.
 - Notification-area icon, remembered position, and refresh every 15 seconds.
-- No API key or additional sign-in required.
+- Uses the existing Codex ChatGPT sign-in; no API key required.
 
 ## Installation
 
@@ -36,19 +38,35 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build.ps1 -Runtime w
 ## Using the widget
 
 - Drag the header to move the widget. Its position is remembered on that device.
+- Use the **↕** button in the header to switch between full-size and compact layouts.
 - Use the crosshair button to toggle **Always on top**.
+- Enable **Auto-resume** in the header to watch for new usage-limit interruptions. Choose **Resume target → Codex Desktop** or **Terminal / CLI** in the options menu.
 - Select **⋯** or right-click the widget to refresh, open the Codex usage dashboard, choose a data folder, hide to the notification area, or quit.
-- Press **F5** to reread usage or **Esc** to hide. Double-click the notification-area icon to show the widget again.
+- Press **F5** to refresh usage or **Esc** to hide. Double-click the notification-area icon to show the widget again.
+
+## Automatic continuation
+
+Auto-resume is **off by default**. While enabled, the widget watches root chats in the selected Codex data folder for structured usage-limit failures. When Codex confirms that included usage is available, it sends a continuation to the exact interrupted chat. Weekly limits also block recovery; an elapsed countdown alone never starts work. Older Codex versions that do not report `ordinaryUsageAllowed` can display usage but cannot authorize automatic recovery.
+
+**Codex Desktop** requires a running shared app-server with its control socket at `<CODEX_HOME>\app-server-control\app-server-control.sock`, a loaded idle chat, and support for the queue APIs. The widget verifies that a turn actually starts. Installations without this connection show **Desktop connection unavailable**; selecting Desktop never silently runs the chat through the CLI.
+
+**CLI** uses `codex exec resume` with the recorded chat UUID, workspace, model, approval policy, and supported sandbox settings. It does not select the most recent chat or enable permission bypasses. Noninteractive CLI runs cannot answer approval requests; incompatible permissions or providers require manual continuation. CLI recovery currently supports the OpenAI provider with recorded `read-only` or `workspace-write` sandbox policies.
+
+The widget must remain running, including in the notification area. It does not install a scheduled task or service. Disabling auto-resume or changing its target clears pending recovery. Already-dispatched work is not interrupted. A newer user message, cancellation, changed account, or subsequent task activity prevents an old failure from resuming. Spawned agents and failures predating activation are excluded.
+
+Recovery state survives widget restarts. If a crash makes delivery uncertain, the widget requests manual attention instead of sending another continuation. Check the affected chat before disabling and re-enabling recovery.
 
 ## Usage data and privacy
 
-By default, the widget reads Codex session records from `%USERPROFILE%\.codex\sessions`. It honors `CODEX_HOME`; **Choose Codex data folder** can select another Codex data directory. Settings stay in `%LOCALAPPDATA%\CodexUsageWidget\settings.json` on the local device.
+Live usage requires an installed Codex executable and an existing ChatGPT sign-in. The widget discovers native CLI executables on `PATH`, in the standard Codex Desktop installation, or in an npm installation. Codex handles authentication and account requests through its [app-server protocol](https://learn.chatgpt.com/docs/app-server).
 
-The widget reads local files without changing them. It does not read `auth.json` or make network requests. The dashboard opens in a browser only when selected.
+By default, local session records come from `%USERPROFILE%\.codex\sessions`. The widget honors `CODEX_HOME`; **Choose Codex data folder** selects another Codex home for both live reads and session monitoring. Settings and recovery metadata stay in `%LOCALAPPDATA%\CodexUsageWidget`, outside the repository. Recovery stores chat and turn identifiers, workspace and execution settings, and a hashed account identifier; it does not copy chat transcripts or credentials.
 
-Usage values come from the latest plan-usage snapshot recorded in local Codex session files. The widget checks for changes every 15 seconds; it does not query the account live. Usage from other devices or cloud sessions appears after Codex records a newer snapshot locally. Older readings are marked **Last seen**. After a window's reset time passes, the widget waits for a new snapshot instead of assuming the allowance has reset.
+The widget does not open `auth.json` or collect authentication tokens. Codex makes the authenticated network requests. With auto-resume enabled, Codex may execute work in the interrupted task's workspace. The dashboard opens in a browser only when selected.
 
-The [Codex usage dashboard](https://chatgpt.com/codex/settings/usage) shows current account usage and limits. The data format is an internal Codex detail and may change; see the upstream [token-count protocol](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs).
+Usage refreshes every 15 seconds. Failed live reads display **Last live reading** or **Local snapshot**, with the error in the tooltip. Cached readings never authorize recovery. After a reported reset passes, the display waits for a new reading instead of assuming the allowance has reset.
+
+The [Codex usage dashboard](https://chatgpt.com/codex/settings/usage) is available for comparison. Codex protocol and session formats may change; unsupported records remain unscheduled. Automatic continuation watches local Desktop/CLI root chats, rather than cloud tasks or chats without local session records.
 
 ## Development
 
@@ -57,6 +75,8 @@ Run the local usage checks:
 ```powershell
 dotnet run --project tests/UsageChecks/UsageChecks.csproj --configuration Release
 ```
+
+These checks use temporary fixtures and a fake Codex process; they do not start model tasks. Add `-- --live-rpc` to also verify a real read-only account usage query against the installed Codex.
 
 Build and publish the portable executable:
 

@@ -1,6 +1,8 @@
 using System.Text.Json;
 using TokenUsageTracker;
 
+if (args is ["--fake-codex", var scenario]) { ResumeChecks.Fake(scenario); return; }
+
 int checks = 0;
 void Check(bool condition, string message)
 {
@@ -61,6 +63,18 @@ try
     Check(reader.Read(Path.Combine(root, "other-profile")).Snapshot is null, "Changing the data folder does not show the previous profile's data");
 }
 finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+
+await ResumeChecks.RunAsync(Check);
+
+if (args.Contains("--live-rpc"))
+{
+    string home = Environment.GetEnvironmentVariable("CODEX_HOME") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
+    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+    using var client = await CodexClient.ConnectAsync(home, false, timeout.Token);
+    var live = await client.ReadUsageAsync(timeout.Token);
+    Check(live.Snapshot.Primary is not null, "Real read-only Codex account RPC returns plan usage");
+    Console.WriteLine($"Live RPC: primary={live.Snapshot.Primary?.Remaining}%, weekly={live.Snapshot.Secondary?.Remaining}%, included-usage-allowed={live.OrdinaryUsageAllowed}");
+}
 
 if (args.Contains("--live"))
 {

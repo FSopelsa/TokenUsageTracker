@@ -12,6 +12,9 @@ public sealed class WidgetSettings
     public double? Left { get; set; }
     public double? Top { get; set; }
     public bool AlwaysOnTop { get; set; } = true;
+    public bool CompactMode { get; set; }
+    public bool AutoResume { get; set; }
+    public string ResumeTarget { get; set; } = "Desktop";
     public string? CodexFolder { get; set; }
 
     [JsonIgnore]

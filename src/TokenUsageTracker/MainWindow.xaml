@@ -38,30 +38,40 @@
       </Setter.Value></Setter>
     </Style>
   </Window.Resources>
-  <Border Margin="9" Padding="19,14,19,16" CornerRadius="18" Background="#171E26" BorderBrush="#36414C" BorderThickness="1">
+  <Border x:Name="Card" Margin="9" Padding="19,14,19,16" CornerRadius="18" Background="#171E26" BorderBrush="#36414C" BorderThickness="1">
     <Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.3" /></Border.Effect>
-    <Grid>
+      <Grid x:Name="LayoutGrid">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
-      <Grid MouseLeftButtonDown="DragWidget" Background="Transparent" Cursor="SizeAll">
+      <Grid x:Name="Header" MouseLeftButtonDown="DragWidget" Background="Transparent" Cursor="SizeAll">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <Border Width="25" Height="25" Background="#BEF078" CornerRadius="7" Margin="0,0,9,0">
             <TextBlock Text="&gt;_" Foreground="#171E26" FontFamily="Consolas" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
           </Border>
           <TextBlock Text="Codex" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" />
         </StackPanel>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <CheckBox x:Name="AutoResumeToggle" Grid.Column="1" Content="Auto-resume" VerticalAlignment="Center" HorizontalAlignment="Right"
+                  Margin="4,0,4,0" FontSize="9" Foreground="#EDF2F6" Cursor="Hand"
+                  Checked="AutoResumeChanged" Unchecked="AutoResumeChanged"
+                  ToolTip="Continue tasks interrupted by a usage limit when included usage returns. Select Desktop or CLI in Options."
+                  AutomationProperties.Name="Automatically resume tasks after a Codex usage limit" />
+        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+          <Button x:Name="ModeButton" Content="↕" Click="ToggleCompact" ToolTip="Switch to compact mode" AutomationProperties.Name="Switch to compact mode" />
           <Button x:Name="PinButton" Content="⌖" Click="TogglePin" ToolTip="Always on top" AutomationProperties.Name="Toggle always on top" />
           <Button Content="⋯" Click="OpenMenu" ToolTip="Options" AutomationProperties.Name="Widget options" />
         </StackPanel>
       </Grid>
-      <Grid Grid.Row="1" Margin="0,19,0,0">
+      <Grid x:Name="PlanRow" Grid.Row="1" Margin="0,19,0,0">
         <TextBlock Text="PLAN REMAINING" Foreground="#9BA9B7" FontSize="10" FontWeight="SemiBold" />
         <TextBlock x:Name="PlanText" Text="LOCAL" Foreground="#BEF078" FontSize="10" HorizontalAlignment="Right" />
       </Grid>
-      <StackPanel Grid.Row="2" Margin="0,9,0,0">
+      <Grid x:Name="UsageGrid" Grid.Row="2">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="0" /></Grid.ColumnDefinitions>
+      <StackPanel x:Name="PrimaryPanel" Grid.Row="0" Margin="0,9,0,0">
         <Grid>
           <TextBlock x:Name="PrimaryLabel" Text="5-hour window" FontSize="12" Foreground="#ACB8C5" VerticalAlignment="Center" />
           <TextBlock x:Name="PrimaryValue" Text="—" FontSize="35" FontWeight="SemiBold" HorizontalAlignment="Right" />
@@ -69,7 +79,7 @@
         <ProgressBar x:Name="PrimaryBar" Margin="0,5,0,0" AutomationProperties.Name="Primary window remaining percent" />
         <TextBlock x:Name="PrimaryReset" Text="Waiting for Codex" FontSize="11" Foreground="#8F9FAF" Margin="0,7,0,0" />
       </StackPanel>
-      <StackPanel Grid.Row="3" Margin="0,16,0,0">
+      <StackPanel x:Name="SecondaryPanel" Grid.Row="1" Margin="0,16,0,0">
         <Grid>
           <TextBlock x:Name="SecondaryLabel" Text="Weekly window" FontSize="12" Foreground="#ACB8C5" VerticalAlignment="Center" />
           <TextBlock x:Name="SecondaryValue" Text="—" FontSize="25" FontWeight="SemiBold" HorizontalAlignment="Right" />
@@ -77,14 +87,15 @@
         <ProgressBar x:Name="SecondaryBar" Margin="0,7,0,0" AutomationProperties.Name="Secondary window remaining percent" />
         <TextBlock x:Name="SecondaryReset" Text="Waiting for Codex" FontSize="11" Foreground="#8F9FAF" Margin="0,7,0,0" />
       </StackPanel>
-      <Border Grid.Row="5" BorderBrush="#303A45" BorderThickness="0,1,0,0" Padding="0,11,0,0" Margin="0,14,0,0">
+      </Grid>
+      <Border x:Name="Footer" Grid.Row="5" BorderBrush="#303A45" BorderThickness="0,1,0,0" Padding="0,11,0,0" Margin="0,14,0,0">
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="28" /></Grid.ColumnDefinitions>
           <StackPanel VerticalAlignment="Center">
             <TextBlock x:Name="StatusText" Text="Looking for usage…" FontSize="10" Foreground="#9BA9B7" TextTrimming="CharacterEllipsis" />
-            <TextBlock Text="from local Codex activity" FontSize="10" Foreground="#718292" Margin="0,3,0,0" />
+            <TextBlock x:Name="SourceText" Text="from local Codex activity" FontSize="10" Foreground="#718292" Margin="0,3,0,0" />
           </StackPanel>
-          <Button Grid.Column="1" Content="↻" Click="RefreshClicked" ToolTip="Reread local usage (F5)" AutomationProperties.Name="Refresh local usage" />
+          <Button x:Name="RefreshButton" Grid.Column="1" Content="↻" Click="RefreshClicked" ToolTip="Refresh live usage (F5)" AutomationProperties.Name="Refresh Codex usage" />
         </Grid>
       </Border>
     </Grid>

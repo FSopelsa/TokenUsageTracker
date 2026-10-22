@@ -13,3 +13,8 @@ settings.json
 *.jsonl
 .env
 .env.*
+
+.projectmem/events.jsonl
+.projectmem/watch.pid
+.projectmem/watch.log
+.projectmem/structure.json

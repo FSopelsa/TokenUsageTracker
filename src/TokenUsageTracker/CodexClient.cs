@@ -58,6 +58,16 @@ public sealed class CodexClient : IDisposable
             UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true
         };
+        string? systemGit = (Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine) ?? "")
+            .Split(Path.PathSeparator).Select(dir => dir.Trim().Trim('"'))
+            .FirstOrDefault(dir => dir.Length > 0 && File.Exists(Path.Combine(dir, "git.exe")));
+        if (systemGit is not null)
+        {
+            // Keep Codex child processes on machine Git instead of an inherited bundled Git.
+            start.Environment["PATH"] = string.Join(Path.PathSeparator, new[] { systemGit }.Concat(
+                (start.Environment["PATH"] ?? "").Split(Path.PathSeparator).Select(dir => dir.Trim().Trim('"'))
+                    .Where(dir => dir.Length > 0 && !File.Exists(Path.Combine(dir, "git.exe")))));
+        }
         start.Environment["CODEX_HOME"] = home;
         foreach (string arg in args) start.ArgumentList.Add(arg);
         return start;

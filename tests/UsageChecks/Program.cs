@@ -31,10 +31,10 @@ Check(savedSettings.TryGetProperty("CompactWidth", out var compactWidth) && comp
 Check(resizedSettings.WindowSize(true) == (240, 120) && resizedSettings.WindowSize(false) == (350, 400),
     "Switching layouts restores each layout's saved dimensions");
 var oldSettings = JsonSerializer.Deserialize<WidgetSettings>("{\"CompactMode\":true}")!;
-Check(oldSettings.WindowSize(true) == (432, 162) && oldSettings.WindowSize(false) == (316, 348),
+Check(oldSettings.WindowSize(true) == (432, 162) && oldSettings.WindowSize(false) == (316, 384),
     "Older settings without dimensions retain the original default sizes");
 var invalidSize = new WidgetSettings { FullWidth = double.NaN, FullHeight = -1, CompactWidth = 0, CompactHeight = double.PositiveInfinity };
-Check(invalidSize.WindowSize(true) == (432, 162) && invalidSize.WindowSize(false) == (316, 348),
+Check(invalidSize.WindowSize(true) == (432, 162) && invalidSize.WindowSize(false) == (316, 384),
     "Invalid saved dimensions fall back to usable window sizes");
 
 string Event(string timestamp, double percent = 6, string? id = "codex", bool primary = true) => JsonSerializer.Serialize(new
@@ -92,6 +92,7 @@ finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 
 await ResumeChecks.RunAsync(Check);
 await ClaudeChecks.RunAsync(Check);
+TaskHistoryChecks.Run(Check);
 
 if (args.Contains("--live-rpc"))
 {
@@ -101,6 +102,19 @@ if (args.Contains("--live-rpc"))
     var live = await client.ReadUsageAsync(timeout.Token);
     Check(live.Snapshot.Primary is not null, "Real read-only Codex account RPC returns plan usage");
     Console.WriteLine($"Live RPC: primary={live.Snapshot.Primary?.Remaining}%, weekly={live.Snapshot.Secondary?.Remaining}%, included-usage-allowed={live.OrdinaryUsageAllowed}");
+}
+
+if (args.Contains("--live-history"))
+{
+    string home = WidgetSettings.Load().DataFolder;
+    var watch = System.Diagnostics.Stopwatch.StartNew();
+    var history = new TaskHistory();
+    var ranking = history.Read(home, null, 10080, DateTimeOffset.UtcNow);
+    Console.WriteLine($"History diagnostics: tasks={ranking.Tasks.Count}, with tokens={ranking.Tasks.Count(t => t.Total > 0)}, with prompts={ranking.Tasks.Count(t => t.Task.Prompt.Length > 0)}; {ranking.Note}");
+    Check(ranking.Tasks.Count > 0 && ranking.Tasks.Any(t => t.Total > 0 && t.Task.Prompt.Length > 0), "Real local history contains named tasks with token records");
+    Console.WriteLine($"Local history: {ranking.Tasks.Count} tasks; scan={watch.ElapsedMilliseconds}ms");
+    watch.Restart(); history.Read(home, null, 300, DateTimeOffset.UtcNow);
+    Console.WriteLine($"Cached five-hour scan={watch.ElapsedMilliseconds}ms");
 }
 
 if (args.Contains("--live"))

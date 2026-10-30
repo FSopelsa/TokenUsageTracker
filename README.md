@@ -59,6 +59,14 @@ The widget must remain running, including in the notification area. It does not 
 
 Recovery state survives widget restarts. If a crash makes delivery uncertain, the widget requests manual attention instead of sending another continuation. Check the affected chat before disabling and re-enabling recovery.
 
+## Task history in full-size mode
+
+Open **5h tasks ▾** or **Weekly tasks ▾** for local Codex prompts ranked by recorded tokens. Hover for a summary; click for the original prompt, recorded completion, model, token breakdown, tool activity and linked agent subtasks. Prompts stay local; task names are shortened from the prompt without an extra model request.
+
+The lists use the reported reset time and window length. If those are unavailable or expired, they show a labelled rolling five-hour/seven-day lookback. Tasks crossing a boundary include only responses recorded inside that window. Cached input is included in input tokens, and reasoning is included in output tokens; neither is counted twice. Older logs use differences between cumulative counters. A task without token records is shown with an unknown cost.
+
+**Percentage points are estimates**, calculated as a task's token share among local tasks multiplied by reported window usage. Codex does not provide an exact per-task quota charge or fixed subscription token budget. Model weights, caching, other devices/accounts and missing local sessions can make this allocation inaccurate. These are not API prices. Claude status-line snapshots do not contain task history, so these lists are available for Codex only.
+
 ## Claude Code setup on Windows
 
 1. Open **⋯ Options → Usage provider → Claude Code**.

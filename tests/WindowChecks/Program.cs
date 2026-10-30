@@ -64,6 +64,8 @@ internal static class Program
                 var card = (System.Windows.Controls.Border)window.FindName("Card");
                 double visibleBottom = window.Height - card.Margin.Bottom - card.BorderThickness.Bottom - card.Padding.Bottom;
                 var names = new List<string> { "Header", "PrimaryLabel", "PrimaryValue", "PrimaryBar", "PrimaryReset", "SecondaryLabel", "SecondaryValue", "SecondaryBar", "SecondaryReset" };
+                if (((FrameworkElement)window.FindName("TaskLists")).Visibility == Visibility.Visible)
+                    names.AddRange(new[] { "TaskLists", "FiveHourTasks", "WeeklyTasks" });
                 if (((FrameworkElement)window.FindName("Footer")).Visibility == Visibility.Visible)
                 {
                     names.Add("Footer"); names.Add("StatusText");
@@ -110,7 +112,7 @@ internal static class Program
             Render("window-compact-wide-short.png");
             Call("SetCompact", false, false);
             grip.RaiseEvent(new DragDeltaEventArgs(-10000, -10000) { RoutedEvent = Thumb.DragDeltaEvent });
-            Check(window.Width == 280 && window.Height == 348, "Full layout has its own usable minimum");
+            Check(window.Width == 280 && window.Height == 384, "Full layout has its own usable minimum");
             Render("window-full-minimum.png");
             string claudeFolder = Path.Combine(Path.GetTempPath(), "ClaudeWindowChecks-" + Guid.NewGuid());
             string? previousFolder = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");

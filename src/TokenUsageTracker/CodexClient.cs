@@ -79,7 +79,8 @@ public sealed class CodexClient : IDisposable
     {
         if (desktop && !File.Exists(DesktopSocket(home)))
             throw new IOException("Desktop connection unavailable: this Codex installation has no shared control socket.");
-        string[] args = desktop ? new[] { "app-server", "proxy", "--sock", DesktopSocket(home) } : new[] { "app-server" };
+        string[] args = desktop ? new[] { "app-server", "proxy", "--sock", DesktopSocket(home) }
+            : new[] { "-c", "features.plugins=false", "app-server" };
         return await ConnectProcessAsync(StartInfo(FindExecutable(), home, args), token);
     }
 

@@ -26,7 +26,7 @@ public sealed class WidgetSettings
     {
         static double Valid(double? value, double fallback) => value is > 0 && double.IsFinite(value.Value) ? value.Value : fallback;
         return compact ? (Valid(CompactWidth, 432), Valid(CompactHeight, 162))
-            : (Valid(FullWidth, 316), Valid(FullHeight, 348));
+            : (Valid(FullWidth, 316), Valid(FullHeight, 384));
     }
 
     [JsonIgnore]

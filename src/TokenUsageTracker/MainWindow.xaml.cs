@@ -102,6 +102,7 @@ public partial class MainWindow : Window
             if (!Current() || lifetime.IsCancellationRequested) return;
             var now = DateTimeOffset.Now;
             var snapshot = result.Snapshot;
+            historySnapshot = snapshot;
             ShowWindow(snapshot?.Primary, PrimaryLabel, PrimaryValue, PrimaryBar, PrimaryReset, now);
             ShowWindow(snapshot?.Secondary, SecondaryLabel, SecondaryValue, SecondaryBar, SecondaryReset, now);
             PlanText.Text = snapshot?.Plan?.Replace('_', ' ').ToUpperInvariant() ?? (claude ? "CLAUDE" : "LOCAL");
@@ -221,7 +222,7 @@ public partial class MainWindow : Window
         if (save) SaveSettings();
         settings.CompactMode = compact;
         MinWidth = compact ? 240 : 280;
-        MinHeight = compact ? 120 : 348;
+        MinHeight = compact ? 120 : 384;
         MaxWidth = Math.Max(MinWidth, SystemParameters.VirtualScreenWidth);
         MaxHeight = Math.Max(MinHeight, SystemParameters.VirtualScreenHeight);
         var size = settings.WindowSize(compact);
@@ -257,6 +258,9 @@ public partial class MainWindow : Window
     private void UpdateResponsiveLayout()
     {
         bool compact = settings.CompactMode;
+        TaskLists.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        FiveHourTasks.IsEnabled = WeeklyTasks.IsEnabled = settings.Provider == "Codex";
+        TaskLists.ToolTip = settings.Provider == "Claude" ? "Claude status-line snapshots do not contain task history or token costs." : null;
         bool narrow = Width < (compact ? 360 : 310);
         bool stacked = compact && narrow;
         AutoResumeToggle.Visibility = narrow || settings.Provider == "Claude" ? Visibility.Collapsed : Visibility.Visible;
@@ -312,6 +316,7 @@ public partial class MainWindow : Window
 
     private void UpdateProvider()
     {
+        historySnapshot = null;
         Title = settings.Provider + " Usage";
         ProviderText.Text = settings.Provider;
         RefreshButton.ToolTip = settings.Provider == "Claude" ? "Reread Claude Code snapshot (F5)" : "Refresh live usage (F5)";

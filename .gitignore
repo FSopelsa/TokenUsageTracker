@@ -9,7 +9,9 @@ dist/
 # Local usage logs and credentials must never be committed.
 .codex/
 auth.json
-settings.json
+/settings.json
+.claude/settings.local.json
+CLAUDE.local.md
 *.jsonl
 .env
 .env.*

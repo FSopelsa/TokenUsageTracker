@@ -88,7 +88,7 @@ $data = $raw | ConvertFrom-Json
 # Keep your existing rendering here, using $data.
 ```
 
-The bridge stores only allowance percentages, reset times, and a receipt timestamp in `<CLAUDE_CONFIG_DIR>\usage-widget\usage.json`. It does not store session metadata or read Claude credentials. Multiple Claude Code sessions share this local snapshot; the last bridge update wins. To disconnect, remove the widget's `statusLine` entry, or restore your previous status-line value from the backup while keeping later unrelated settings edits.
+The bridge stores only allowance percentages, reset times, and a receipt timestamp in `<CLAUDE_CONFIG_DIR>\usage-widget\usage.json`. It does not store session metadata or read Claude credentials. Multiple Claude Code sessions share this local snapshot; the last update that reports usable allowances wins. Updates without them, such as a new session's status line before its first reply, keep the previous reading, shown with its age. If the widget was moved since setup, the Claude status line points to the older copy and the widget asks you to run **Set up Claude usage…** again. To disconnect, remove the widget's `statusLine` entry, or restore your previous status-line value from the backup while keeping later unrelated settings edits.
 
 Claude support is display-only. Selecting Claude pauses Codex recovery and clears its pending queue; returning to Codex reapplies your saved auto-resume preference and watches for new interruptions.
 

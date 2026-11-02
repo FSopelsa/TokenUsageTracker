@@ -2,7 +2,7 @@
 
 A small desktop widget that shows the remaining usage in your Codex or Claude plan, including reset times for the current and weekly windows.
 
-<img src="docs/preview.png" alt="Preview of the Codex Usage Widget" width="316" />
+![Preview of the Codex Usage Widget](docs/preview.png)
 
 The percentages shown in this preview are illustrative. Codex usage comes from the installed Codex executable, with labelled local snapshots as a fallback. Claude usage comes from the latest Claude Code status-line snapshot.
 

@@ -38,8 +38,18 @@ internal static class ClaudeChecks
             string contents = File.ReadAllText(cache);
             check(!contents.Contains("private-session") && !contents.Contains("private-workspace") && !contents.Contains("context_window"),
                 "Claude bridge saves no session, workspace, transcript or context metadata");
-            ClaudeUsage.Capture("{}", root, now);
-            check(ClaudeUsage.Read(root).Snapshot is null, "Absent Claude rate limits clear an older allowance instead of displaying phantom usage");
+            string before = File.ReadAllText(cache);
+            ClaudeUsage.Capture("{}", root, now.AddMinutes(1));
+            check(File.ReadAllText(cache) == before && ClaudeUsage.Read(root).Snapshot?.Primary?.Remaining == 76.5,
+                "A status line without rate limits, such as before the first reply, leaves the saved reading unchanged");
+            ClaudeUsage.Capture("{\"rate_limits\":{\"five_hour\":{\"used_percentage\":\"x\"}}}", root, now.AddMinutes(2));
+            check(File.ReadAllText(cache) == before, "An invalid windowless update keeps the last good reading");
+            ClaudeUsage.Capture("""{"rate_limits":{"seven_day":{"used_percentage":41.2,"resets_at":1894060800}}}""", root, now.AddMinutes(3));
+            check(ClaudeUsage.Read(root).Snapshot is { Primary: null, Secondary.Remaining: 58.8 },
+                "A fresh update without a five-hour window does not revive the older five-hour allowance");
+            ClaudeUsage.Capture("""{"rate_limits_available":false}""", root, now.AddMinutes(4));
+            check(ClaudeUsage.Read(root).Snapshot is null, "Unavailable subscription limits clear a cached reading");
+            check(!Directory.EnumerateFiles(Path.Combine(root, "usage-widget"), "*.tmp").Any(), "Snapshot writes leave no temporary files behind");
             ClaudeUsage.Capture(input, root, now);
             try { ClaudeUsage.Capture("{", root, now); } catch (JsonException) { }
             check(ClaudeUsage.Read(root).Snapshot?.Primary?.Remaining == 76.5, "Malformed status-line input cannot corrupt a complete cached reading");
@@ -63,10 +73,15 @@ internal static class ClaudeChecks
             string configured = File.ReadAllText(config);
             check(ClaudeUsage.ConfigureStatusLine(root, executable) && File.ReadAllText(config) == configured, "Repeating Claude setup is idempotent");
             check(ClaudeUsage.ConfigureStatusLine(root, executable + ".moved"), "Claude setup can reconnect a relocated widget-owned status line");
+            check(ClaudeUsage.GetStatusLineState(root, executable + ".moved") == ClaudeUsage.StatusLineState.Connected
+                && ClaudeUsage.GetStatusLineState(root, executable) == ClaudeUsage.StatusLineState.OtherWidgetPath,
+                "A moved widget reports the older status-line location instead of silently keeping it");
             const string custom = "{\"statusLine\":{\"type\":\"command\",\"command\":\"my-custom-script\",\"padding\":2}}";
             File.WriteAllText(config, custom);
             check(!ClaudeUsage.ConfigureStatusLine(root, executable) && File.ReadAllText(config) == custom,
                 "Claude setup never overwrites a custom status line");
+            check(ClaudeUsage.GetStatusLineState(root, executable) == ClaudeUsage.StatusLineState.Custom,
+                "A custom status line is reported as custom, not as a widget path");
             File.WriteAllText(config, "{");
             try { ClaudeUsage.ConfigureStatusLine(root, executable); } catch (JsonException) { }
             check(File.ReadAllText(config) == "{", "Claude setup never overwrites malformed settings");

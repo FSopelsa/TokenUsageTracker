@@ -103,10 +103,10 @@ public partial class MainWindow : Window
             var now = DateTimeOffset.Now;
             var snapshot = result.Snapshot;
             historySnapshot = snapshot;
-            ShowWindow(snapshot?.Primary, PrimaryLabel, PrimaryValue, PrimaryBar, PrimaryReset, now);
-            ShowWindow(snapshot?.Secondary, SecondaryLabel, SecondaryValue, SecondaryBar, SecondaryReset, now);
-            PlanText.Text = snapshot?.Plan?.Replace('_', ' ').ToUpperInvariant() ?? (claude ? "CLAUDE" : "LOCAL");
             bool stale = snapshot is not null && now - snapshot.Timestamp > TimeSpan.FromMinutes(15);
+            ShowWindow(snapshot?.Primary, PrimaryLabel, PrimaryValue, PrimaryBar, PrimaryReset, now, stale);
+            ShowWindow(snapshot?.Secondary, SecondaryLabel, SecondaryValue, SecondaryBar, SecondaryReset, now, stale);
+            PlanText.Text = snapshot?.Plan?.Replace('_', ' ').ToUpperInvariant() ?? (claude ? "CLAUDE" : "LOCAL");
             string source = claude ? "Claude Code snapshot" : live is not null ? "Live account usage" : lastLive is not null ? "Last live reading" : "Local snapshot";
             string status = snapshot is null ? claude ? "Waiting for Claude Code · see Options" : "Waiting for plan usage"
                 : snapshot.Timestamp > now.AddMinutes(5) ? "Check your computer clock"
@@ -115,9 +115,15 @@ public partial class MainWindow : Window
                 ? $"{PlanText.Text} · {status}" : status;
             StatusText.Foreground = error is not null || result.Error is not null || stale ? Amber : Muted;
             string recovery;
+            bool claudeNeedsSetup = false;
             try
             {
-                if (claude) recovery = "Claude usage display only · auto-resume unavailable";
+                if (claude)
+                {
+                    claudeNeedsSetup = await Task.Run(() => ClaudeUsage.GetStatusLineState(folder, Environment.ProcessPath!)) == ClaudeUsage.StatusLineState.OtherWidgetPath;
+                    recovery = claudeNeedsSetup ? "Claude status line points to an older widget location · Options → Set up Claude usage"
+                        : "Claude usage display only · auto-resume unavailable";
+                }
                 else
                 {
                     await resume.TickAsync(live, lifetime.Token);
@@ -129,7 +135,8 @@ public partial class MainWindow : Window
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or OperationCanceledException)
             { recovery = "Recovery paused: " + e.Message; }
             if (lifetime.IsCancellationRequested || !Current()) return;
-            SourceText.Text = claude ? "From Claude Code · refreshes every 15s" : settings.AutoResume ? recovery : "Auto-resume off · refreshes every 15s";
+            SourceText.Text = claude ? (claudeNeedsSetup ? "Claude status line needs setup · see Options" : "From Claude Code · refreshes every 15s")
+                : settings.AutoResume ? recovery : "Auto-resume off · refreshes every 15s";
             SourceText.TextTrimming = TextTrimming.CharacterEllipsis;
             SourceText.ToolTip = recovery;
             string details = $"{source}\n{error ?? result.Error}\n{recovery}\n{folder}";
@@ -150,7 +157,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ShowWindow(UsageWindow? w, TextBlock label, TextBlock value, ProgressBar bar, TextBlock reset, DateTimeOffset now)
+    private void ShowWindow(UsageWindow? w, TextBlock label, TextBlock value, ProgressBar bar, TextBlock reset, DateTimeOffset now, bool stale = false)
     {
         if (w is null)
         {
@@ -160,7 +167,7 @@ public partial class MainWindow : Window
         }
         label.Text = w.Label;
         bool expired = w.IsExpired(now);
-        Brush color = expired ? Muted : w.Remaining <= 10 ? Red : w.Remaining <= 25 ? Amber : Green;
+        Brush color = expired || stale ? Muted : w.Remaining <= 10 ? Red : w.Remaining <= 25 ? Amber : Green;
         value.Text = expired ? "—" : w.Remaining.ToString("0.#", CultureInfo.CurrentCulture) + "%";
         value.Foreground = bar.Foreground = color;
         bar.Value = expired ? 0 : w.Remaining;

@@ -112,7 +112,7 @@ Run the local usage checks:
 dotnet run --project tests/UsageChecks/UsageChecks.csproj --configuration Release
 ```
 
-These checks use temporary fixtures and a fake Codex process; they do not start model tasks. Add `-- --live-rpc` to also verify a real read-only account usage query against the installed Codex.
+These checks use temporary fixtures and a fake Codex process; they do not start model tasks. They also run on Linux; see [docs/cloud-environment.md](docs/cloud-environment.md) for Claude cloud sessions. Add `-- --live-rpc` to also verify a real read-only account usage query against the installed Codex.
 
 Check resizing, provider switching, and Claude snapshot display, and render the minimum layouts on Windows without showing the window or starting account queries or task recovery:
 

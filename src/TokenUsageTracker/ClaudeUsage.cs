@@ -104,11 +104,13 @@ public static class ClaudeUsage
         if (status is not null)
         {
             if (status is not JsonObject obj || obj["command"] is not JsonValue value || !value.TryGetValue<string>(out var existing)) return false;
-            if (existing == command) return true;
+            if (existing == command && obj["refreshInterval"] is not null) return true;
             if (!string.IsNullOrWhiteSpace(existing) && existing != previous) return false;
         }
         var line = status as JsonObject ?? new JsonObject();
         line["type"] = "command"; line["command"] = command;
+        // Event-driven updates go quiet while a session waits on subagents; a timer keeps the snapshot current. Keeps a user-set interval.
+        line["refreshInterval"] ??= 60;
         if (status is null) settings["statusLine"] = line;
         Directory.CreateDirectory(folder);
         if (original is not null && !File.Exists(path + ".usage-widget.bak")) File.Copy(path, path + ".usage-widget.bak");

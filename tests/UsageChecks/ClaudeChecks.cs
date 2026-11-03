@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using TokenUsageTracker;
 
 internal static class ClaudeChecks
@@ -72,6 +73,16 @@ internal static class ClaudeChecks
             check(File.ReadAllText(config + ".usage-widget.bak") == original, "Claude setup preserves an exact backup of existing settings");
             string configured = File.ReadAllText(config);
             check(ClaudeUsage.ConfigureStatusLine(root, executable) && File.ReadAllText(config) == configured, "Repeating Claude setup is idempotent");
+            check(JsonNode.Parse(configured)?["statusLine"]?["refreshInterval"]?.GetValue<int>() == 60,
+                "Claude setup adds a refresh interval so the snapshot updates while a session waits on subagents");
+            File.WriteAllText(config, configured.Replace("\"refreshInterval\": 60", "\"refreshInterval\": 5"));
+            check(ClaudeUsage.ConfigureStatusLine(root, executable) && JsonNode.Parse(File.ReadAllText(config))?["statusLine"]?["refreshInterval"]?.GetValue<int>() == 5,
+                "Claude setup keeps a user-chosen refresh interval");
+            var older = JsonNode.Parse(configured)!.AsObject();
+            older["statusLine"]!.AsObject().Remove("refreshInterval");
+            File.WriteAllText(config, older.ToJsonString());
+            check(ClaudeUsage.ConfigureStatusLine(root, executable) && JsonNode.Parse(File.ReadAllText(config))?["statusLine"]?["refreshInterval"]?.GetValue<int>() == 60,
+                "Rerunning setup adds the refresh interval to an existing widget status line");
             check(ClaudeUsage.ConfigureStatusLine(root, executable + ".moved"), "Claude setup can reconnect a relocated widget-owned status line");
             check(ClaudeUsage.GetStatusLineState(root, executable + ".moved") == ClaudeUsage.StatusLineState.Connected
                 && ClaudeUsage.GetStatusLineState(root, executable) == ClaudeUsage.StatusLineState.OtherWidgetPath,

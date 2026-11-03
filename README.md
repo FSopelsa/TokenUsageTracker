@@ -77,7 +77,7 @@ Claude Code's [documented status-line data](https://code.claude.com/docs/en/stat
 
 The widget labels Claude readings **Claude Code snapshot**. The timestamp is when the bridge received the data, not the time of a fresh account request; idle sessions may keep sending an older allowance. Closed Claude Code sessions cannot update it. A passed reset becomes unknown until Claude reports a new window. Missing windows never imply a full allowance. Claude Desktop alone does not supply this bridge's updates.
 
-Setup honors `CLAUDE_CONFIG_DIR`, defaulting to `%USERPROFILE%\.claude`. It preserves unrelated settings, backs up the original `settings.json` to `settings.json.usage-widget.bak`, and leaves existing custom status lines untouched. Project settings, managed policy, workspace trust, or disabled custom hooks can prevent the user-level bridge from running.
+Setup honors `CLAUDE_CONFIG_DIR`, defaulting to `%USERPROFILE%\.claude`. It preserves unrelated settings, backs up the original `settings.json` to `settings.json.usage-widget.bak`, and leaves existing custom status lines untouched. It also sets the status line's `refreshInterval` to 60 seconds (an interval you already set is kept), because Claude Code otherwise stops updating the status line while a session waits on background subagents. If you set up Claude usage with an earlier version, run **Set up Claude usage…** again to add it. Project settings, managed policy, workspace trust, or disabled custom hooks can prevent the user-level bridge from running.
 
 If you already have a custom status line, forward the original JSON to the widget from that script and discard its output. Read stdin once and reuse that input for your existing renderer. For example, in a PowerShell status-line script:
 

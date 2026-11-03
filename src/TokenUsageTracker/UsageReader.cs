@@ -17,10 +17,31 @@ public sealed record UsageWindow(double UsedPercent, int? Minutes, DateTimeOffse
         >= 60 => $"{Minutes / 60.0:0.#}-hour window",
         > 0 => $"{Minutes}-minute window", _ => "Usage window"
     };
+
+    // shortcut: average pace since the window opened, not recent pace; keep a reading log if bursty use makes this misleading.
+    public DateTimeOffset? RunsOutAt(DateTimeOffset readAt)
+    {
+        if (Minutes is not > 0 || ResetsAt is not { } reset || reset <= readAt || UsedPercent is <= 0 or >= 100) return null;
+        var elapsed = readAt - reset.AddMinutes(-Minutes.Value);
+        if (elapsed < TimeSpan.FromMinutes(Minutes.Value / 20.0)) return null; // Too early in the window to extrapolate.
+        var empty = readAt + elapsed * (100 - UsedPercent) / UsedPercent;
+        return empty < reset ? empty : null;
+    }
+}
+
+public sealed record PromptCache(DateTimeOffset? ExpiresAt, long? RecacheTokens)
+{
+    public string Describe(DateTimeOffset now)
+    {
+        string? tokens = RecacheTokens is { } n ? "~" + (n >= 1000 ? $"{n / 1000.0:0}k" : n.ToString()) + " tokens" : null;
+        return ExpiresAt is { } expires && expires > now
+            ? $"Cache cold in {Math.Max(1, (int)Math.Ceiling((expires - now).TotalMinutes))}m" + (tokens is null ? "" : " · re-cache " + tokens)
+            : "Cache cold" + (tokens is null ? "" : " · next prompt re-caches " + tokens);
+    }
 }
 
 public sealed record UsageSnapshot(DateTimeOffset Timestamp, string? Plan,
-    UsageWindow? Primary, UsageWindow? Secondary);
+    UsageWindow? Primary, UsageWindow? Secondary, PromptCache? Cache = null);
 
 public sealed record UsageResult(UsageSnapshot? Snapshot, string? Error);
 

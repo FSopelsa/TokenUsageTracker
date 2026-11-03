@@ -38,8 +38,41 @@ internal static class ClaudeChecks
             string contents = File.ReadAllText(cache);
             check(!contents.Contains("private-session") && !contents.Contains("private-workspace") && !contents.Contains("context_window"),
                 "Claude bridge saves no session, workspace, transcript or context metadata");
-            ClaudeUsage.Capture("{}", root, now);
-            check(ClaudeUsage.Read(root).Snapshot is null, "Absent Claude rate limits clear an older allowance instead of displaying phantom usage");
+            ClaudeUsage.Capture("{}", root, now.AddMinutes(1));
+            check(ClaudeUsage.Read(root).Snapshot is { Primary.Remaining: 76.5 } kept && kept.Timestamp == now,
+                "A new Claude session without reported limits keeps the last allowance and its reading time");
+            ClaudeUsage.Capture(input.Replace("23.5", "10"), root, now.AddMinutes(2));
+            check(ClaudeUsage.Read(root).Snapshot is { Primary.Remaining: 76.5 } higher && higher.Timestamp == now,
+                "An idle session's lower usage for the same window cannot replace a newer reading or refresh its age");
+            ClaudeUsage.Capture(input.Replace("23.5", "30"), root, now.AddMinutes(3));
+            check(ClaudeUsage.Read(root).Snapshot is { Primary.Remaining: 70 } rose && rose.Timestamp == now.AddMinutes(3),
+                "Higher usage for the same window updates the reading and its age");
+            ClaudeUsage.Capture(input.Replace("23.5", "5").Replace("1893456000", "1893474000"), root, now.AddMinutes(4));
+            check(ClaudeUsage.Read(root).Snapshot?.Primary is { Remaining: 95 } next && next.ResetsAt == DateTimeOffset.FromUnixTimeSeconds(1893474000),
+                "A new window replaces the stored window even with lower usage");
+            var expired = new UsageWindow(50, 300, now.AddMinutes(-1));
+            check(ClaudeUsage.Merge(null, expired, now) is null, "An absent window does not keep a window whose reset has passed");
+
+            using (var cached = JsonDocument.Parse("""{"prompt_cache":{"expires_at":1893456000,"recache_tokens_if_cold":183402,"misses":3}}"""))
+                check(ClaudeUsage.Parse(cached.RootElement, now).Cache is { RecacheTokens: 183402 } c && c.ExpiresAt == DateTimeOffset.FromUnixTimeSeconds(1893456000),
+                    "Claude prompt-cache expiry and re-cache size are read from the status line");
+            foreach (string bad in new[] { """{"expires_at":-5}""", """{"expires_at":"soon"}""", """{"recache_tokens_if_cold":-1}""", """{"expires_at":null,"recache_tokens_if_cold":1.5}""", "[]" })
+            {
+                using var invalid = JsonDocument.Parse("{\"prompt_cache\":" + bad + "}");
+                check(ClaudeUsage.Parse(invalid.RootElement, now).Cache is null, "Invalid prompt-cache data is not displayed: " + bad);
+            }
+            var cacheNow = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
+            check(new PromptCache(cacheNow.AddSeconds(170), 183402).Describe(cacheNow) == "Cache cold in 3m · re-cache ~183k tokens"
+                && new PromptCache(cacheNow.AddSeconds(5), null).Describe(cacheNow) == "Cache cold in 1m"
+                && new PromptCache(cacheNow.AddSeconds(-5), 950).Describe(cacheNow) == "Cache cold · next prompt re-caches ~950 tokens"
+                && new PromptCache(null, 183402).Describe(cacheNow) == "Cache cold · next prompt re-caches ~183k tokens",
+                "Prompt-cache text counts down while warm and states the re-cache cost once cold");
+            ClaudeUsage.Capture("""{"prompt_cache":{"expires_at":1893456000,"recache_tokens_if_cold":183402}}""", root, now.AddMinutes(5));
+            ClaudeUsage.Capture("{}", root, now.AddMinutes(6));
+            check(ClaudeUsage.Read(root).Snapshot is { Cache.RecacheTokens: 183402, Primary.Remaining: 95 },
+                "Prompt-cache data and allowances survive a session start that reports neither");
+
+            File.Delete(cache);
             ClaudeUsage.Capture(input, root, now);
             try { ClaudeUsage.Capture("{", root, now); } catch (JsonException) { }
             check(ClaudeUsage.Read(root).Snapshot?.Primary?.Remaining == 76.5, "Malformed status-line input cannot corrupt a complete cached reading");

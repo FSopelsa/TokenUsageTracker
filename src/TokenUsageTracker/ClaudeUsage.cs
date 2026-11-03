@@ -23,42 +23,67 @@ public static class ClaudeUsage
             var used = Json.Get(window, "used_percentage");
             if (used.ValueKind != JsonValueKind.Number || !used.TryGetDouble(out double percent)
                 || !double.IsFinite(percent) || percent < 0 || percent > 100) return null;
-            var reset = Json.Get(window, "resets_at");
-            DateTimeOffset? time = reset.ValueKind == JsonValueKind.Number && reset.TryGetInt64(out long seconds)
-                && seconds >= 0 && seconds <= 253402300799 ? DateTimeOffset.FromUnixTimeSeconds(seconds) : null;
-            return new(percent, minutes, time);
+            return new(percent, minutes, UnixTime(Json.Get(window, "resets_at")));
         }
-        return new(receivedAt, "Claude", Window("five_hour", 300), Window("seven_day", 10080));
+        var cache = Json.Get(data, "prompt_cache");
+        var recache = Json.Get(cache, "recache_tokens_if_cold");
+        var prompt = new PromptCache(UnixTime(Json.Get(cache, "expires_at")),
+            recache.ValueKind == JsonValueKind.Number && recache.TryGetInt64(out long tokens) && tokens >= 0 ? tokens : null);
+        return new(receivedAt, "Claude", Window("five_hour", 300), Window("seven_day", 10080),
+            prompt.ExpiresAt is null && prompt.RecacheTokens is null ? null : prompt);
     }
+
+    private static DateTimeOffset? UnixTime(JsonElement value) => value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out long seconds)
+        && seconds >= 0 && seconds <= 253402300799 ? DateTimeOffset.FromUnixTimeSeconds(seconds) : null;
+
+    // Within one window usage only rises, so a lower value for the same reset comes from an idle session's older response.
+    public static UsageWindow? Merge(UsageWindow? next, UsageWindow? last, DateTimeOffset now) =>
+        next is null ? last is not null && !last.IsExpired(now) ? last : null
+        : last is not null && next.ResetsAt is not null && last.ResetsAt == next.ResetsAt && last.UsedPercent > next.UsedPercent ? last : next;
 
     public static UsageSnapshot Capture(string input, string folder, DateTimeOffset receivedAt)
     {
         if (input.Length > 1_048_576) throw new IOException("Claude status-line data is too large.");
         using var doc = JsonDocument.Parse(input);
-        var snapshot = Parse(doc.RootElement, receivedAt);
+        var next = Parse(doc.RootElement, receivedAt);
+        UsageSnapshot? last = null;
+        try { last = Load(CachePath(folder)); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { /* A corrupt or unreadable cache is replaced. */ }
+        // A session start reports no limits until its first response; keep the last reading instead of blanking it.
+        var five = Merge(next.Primary, last?.Primary, receivedAt);
+        var week = Merge(next.Secondary, last?.Secondary, receivedAt);
+        bool reported = next.Primary is not null || next.Secondary is not null;
+        bool stale = next.Primary is not null && five != next.Primary || next.Secondary is not null && week != next.Secondary;
+        var snapshot = new UsageSnapshot(last is null || reported && !stale ? receivedAt : last.Timestamp, "Claude", five, week, next.Cache ?? last?.Cache);
         object? Window(UsageWindow? w) => w is null ? null : new { used_percentage = w.UsedPercent, resets_at = w.ResetsAt?.ToUnixTimeSeconds() };
-        // Store only allowances and receipt time; status-line input also contains private session metadata.
+        // Store only allowances, cache expiry/size and receipt time; status-line input also contains private session metadata.
         AtomicWrite(CachePath(folder), JsonSerializer.Serialize(new
         {
-            received_at = receivedAt,
-            rate_limits = new { five_hour = Window(snapshot.Primary), seven_day = Window(snapshot.Secondary) }
+            received_at = snapshot.Timestamp,
+            rate_limits = new { five_hour = Window(five), seven_day = Window(week) },
+            prompt_cache = snapshot.Cache is { } c ? new { expires_at = c.ExpiresAt?.ToUnixTimeSeconds(), recache_tokens_if_cold = c.RecacheTokens } : null
         }));
         return snapshot;
+    }
+
+    private static UsageSnapshot? Load(string path)
+    {
+        if (!File.Exists(path)) return null;
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        if (stream.Length > 1_048_576) throw new IOException("Claude usage snapshot is too large.");
+        using var doc = JsonDocument.Parse(stream);
+        if (!DateTimeOffset.TryParse(Json.Text(doc.RootElement, "received_at"), CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind, out var time) || time > DateTimeOffset.UtcNow.AddMinutes(5))
+            throw new JsonException("Invalid Claude snapshot timestamp.");
+        return Parse(doc.RootElement, time);
     }
 
     public static UsageResult Read(string folder)
     {
         try
         {
-            string path = CachePath(folder);
-            if (!File.Exists(path)) return new(null, "Choose Set up Claude usage in Options, then use Claude Code. Requires reported subscription rate limits.");
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            if (stream.Length > 1_048_576) throw new IOException("Claude usage snapshot is too large.");
-            using var doc = JsonDocument.Parse(stream);
-            if (!DateTimeOffset.TryParse(Json.Text(doc.RootElement, "received_at"), CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind, out var time) || time > DateTimeOffset.UtcNow.AddMinutes(5))
-                throw new JsonException("Invalid Claude snapshot timestamp.");
-            var snapshot = Parse(doc.RootElement, time);
+            var snapshot = Load(CachePath(folder));
+            if (snapshot is null) return new(null, "Choose Set up Claude usage in Options, then use Claude Code. Requires reported subscription rate limits.");
             return snapshot.Primary is null && snapshot.Secondary is null
                 ? new(null, "Claude Code reported no subscription windows. Use an eligible subscription and wait for a new response; API usage and expired windows are not shown.")
                 : new(snapshot, null);

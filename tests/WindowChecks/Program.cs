@@ -29,6 +29,8 @@ internal static class Program
         try
         {
             var settings = (WidgetSettings)Field("settings");
+            // MainWindow loads the user's saved preferences; start from Codex so a saved Claude choice cannot hide Codex-only controls.
+            settings.Provider = "Codex";
             settings.FullWidth = 350; settings.FullHeight = 400;
             settings.CompactWidth = 300; settings.CompactHeight = 150;
             Call("SetCompact", true, false);

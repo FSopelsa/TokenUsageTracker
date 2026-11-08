@@ -94,7 +94,7 @@ public sealed class CodexClient : IDisposable
         {
             await client.RequestAsync("initialize", new
             {
-                clientInfo = new { name = "codex_usage_widget", title = "Codex Usage Widget", version = "1.0" },
+                clientInfo = new { name = "token_usage_tracker", title = "Token Usage Tracker", version = "1.0" },
                 capabilities = new { experimentalApi = true }
             }, token);
             await process.StandardInput.WriteLineAsync("{\"method\":\"initialized\"}".AsMemory(), token);

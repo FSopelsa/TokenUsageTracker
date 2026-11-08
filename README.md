@@ -1,8 +1,8 @@
-# Codex & Claude Usage Widget for Windows
+# Token Usage Tracker for Windows
 
 A small desktop widget that shows the remaining usage in your Codex or Claude plan, including reset times for the current and weekly windows.
 
-![Preview of the Codex Usage Widget](docs/preview.png)
+![Preview of Token Usage Tracker](docs/preview.png)
 
 The percentages shown in this preview are illustrative. Codex usage comes from the installed Codex executable, with labelled local snapshots as a fallback. Claude usage comes from the latest Claude Code status-line snapshot.
 
@@ -20,13 +20,13 @@ The percentages shown in this preview are illustrative. Codex usage comes from t
 
 ### Download a build
 
-The GitHub Actions workflow builds a portable `win-x64` executable on each push, pull request, or manual workflow run. After a successful run, download `CodexUsageWidget-win-x64` from the workflow's **Artifacts** section and extract it. Run `CodexUsageWidget.exe` on Windows 10 or 11 x64. An installed .NET runtime is not required.
+The GitHub Actions workflow builds a portable `win-x64` executable on each push, pull request, or manual workflow run. After a successful run, download `TokenUsageTracker-win-x64` from the workflow's **Artifacts** section and extract it. Run `TokenUsageTracker.exe` on Windows 10 or 11 x64. An installed .NET runtime is not required.
 
 Actions artifacts are build outputs; they are not GitHub Releases.
 
 ### Build from source
 
-Clone the repository and run `Launch.cmd`. On first launch, the script runs the usage checks and builds the widget. Building requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and an internet connection to download Microsoft's runtime packs. The resulting portable executable is written to `dist/CodexUsageWidget.exe`.
+Clone the repository and run `Launch.cmd`. On first launch, the script runs the usage checks and builds the widget. Building requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and an internet connection to download Microsoft's runtime packs. The resulting portable executable is written to `dist/TokenUsageTracker.exe`.
 
 After pulling source changes, quit the running widget, run `Build.cmd`, then run `Launch.cmd`.
 
@@ -70,7 +70,7 @@ The lists use the reported reset time and window length. If those are unavailabl
 ## Claude Code setup on Windows
 
 1. Open **⋯ Options → Usage provider → Claude Code**.
-2. Select **Set up Claude usage…**. This adds a status-line command to the user-level Claude settings. Use the widget's final location before setup; run setup again if you move the executable.
+2. Select **Set up Claude usage…**. This adds a status-line command to the user-level Claude settings. Use the widget's final location before setup; run setup again if you move the executable. If you set up Claude usage before the widget was renamed from `CodexUsageWidget.exe` to `TokenUsageTracker.exe`, run setup again from the new executable.
 3. Open Claude Code, sign in with an eligible subscription, and wait for a response. The widget rereads the reported five-hour and weekly allowances every 15 seconds; **F5** rereads immediately.
 
 Claude Code's [documented status-line data](https://code.claude.com/docs/en/statusline) supplies `rate_limits.five_hour` and `rate_limits.seven_day` for supported subscriptions after a response. These are subscription allowances, separate from context tokens or API dollar costs. An API key or gateway spend limit alone does not provide these subscription windows. Update Claude Code if your version does not report them.
@@ -83,7 +83,7 @@ If you already have a custom status line, forward the original JSON to the widge
 
 ```powershell
 $raw = [Console]::In.ReadToEnd()
-$raw | & 'C:\path\to\CodexUsageWidget.exe' --claude-statusline | Out-Null
+$raw | & 'C:\path\to\TokenUsageTracker.exe' --claude-statusline | Out-Null
 $data = $raw | ConvertFrom-Json
 # Keep your existing rendering here, using $data.
 ```
@@ -96,7 +96,7 @@ Claude support is display-only. Selecting Claude pauses Codex recovery and clear
 
 Live usage requires an installed Codex executable and an existing ChatGPT sign-in. The widget discovers native CLI executables on `PATH`, in the standard Codex Desktop installation, or in an npm installation. Codex handles authentication and account requests through its [app-server protocol](https://learn.chatgpt.com/docs/app-server).
 
-By default, local session records come from `%USERPROFILE%\.codex\sessions`. The widget honors `CODEX_HOME`; **Choose Codex data folder** selects another Codex home for both live reads and session monitoring. Settings and recovery metadata stay in `%LOCALAPPDATA%\CodexUsageWidget`, outside the repository. Recovery stores chat and turn identifiers, workspace and execution settings, and a hashed account identifier; it does not copy chat transcripts or credentials.
+By default, local session records come from `%USERPROFILE%\.codex\sessions`. The widget honors `CODEX_HOME`; **Choose Codex data folder** selects another Codex home for both live reads and session monitoring. Settings and recovery metadata stay in `%LOCALAPPDATA%\TokenUsageTracker`, outside the repository. An existing `%LOCALAPPDATA%\CodexUsageWidget` folder from before the rename is moved there on first launch. Recovery stores chat and turn identifiers, workspace and execution settings, and a hashed account identifier; it does not copy chat transcripts or credentials.
 
 The widget does not open `auth.json` or collect authentication tokens. Codex makes the authenticated network requests. With auto-resume enabled, Codex may execute work in the interrupted task's workspace. The dashboard opens in a browser only when selected.
 

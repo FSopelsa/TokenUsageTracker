@@ -46,7 +46,8 @@ public sealed class ResumeController : IDisposable
     public ResumeController(string? path = null, Func<string, bool, CancellationToken, Task<CodexClient>>? connect = null)
     {
         this.connect = connect ?? CodexClient.ConnectAsync;
-        statePath = path ?? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexUsageWidget", "resume-state.json");
+        if (path is null) AppData.MigrateLegacyFolder();
+        statePath = path ?? System.IO.Path.Combine(AppData.Folder(), "resume-state.json");
         try
         {
             state = JsonSerializer.Deserialize<ResumeState>(File.ReadAllText(statePath)) ?? new();

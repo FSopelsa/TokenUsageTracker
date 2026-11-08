@@ -17,7 +17,7 @@ public partial class App : Application
             Shutdown(ClaudeUsage.RunStatusLine(Console.In, Console.Out, Console.Error, ClaudeUsage.ConfigFolder));
             return;
         }
-        instance = new Mutex(true, @"Local\CodexUsageWidget", out bool first);
+        instance = new Mutex(true, @"Local\TokenUsageTracker", out bool first);
         if (!first) { Shutdown(); return; }
         MainWindow = new MainWindow();
         MainWindow.Show();

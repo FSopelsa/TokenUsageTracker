@@ -7,8 +7,7 @@ namespace TokenUsageTracker;
 
 public sealed class WidgetSettings
 {
-    private static readonly string FilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexUsageWidget", "settings.json");
+    private static readonly string FilePath = Path.Combine(AppData.Folder(), "settings.json");
     public double? Left { get; set; }
     public double? Top { get; set; }
     public bool AlwaysOnTop { get; set; } = true;
@@ -36,6 +35,7 @@ public sealed class WidgetSettings
 
     public static WidgetSettings Load()
     {
+        AppData.MigrateLegacyFolder();
         try { return JsonSerializer.Deserialize<WidgetSettings>(File.ReadAllText(FilePath)) ?? new(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { return new(); }
     }

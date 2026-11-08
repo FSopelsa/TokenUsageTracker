@@ -98,6 +98,20 @@ internal static class ClaudeChecks
             check(File.ReadAllText(config) == "{", "Claude setup never overwrites malformed settings");
             check(new WidgetSettings().Provider == "Codex", "Existing widget settings continue to select Codex by default");
 
+            string localData = Path.Combine(root, "local-app-data");
+            string legacyDir = Path.Combine(localData, AppData.LegacyFolderName);
+            Directory.CreateDirectory(legacyDir);
+            File.WriteAllText(Path.Combine(legacyDir, "settings.json"), "{\"CompactMode\":true}");
+            check(AppData.MigrateLegacyFolder(localData)
+                && File.ReadAllText(Path.Combine(AppData.Folder(localData), "settings.json")) == "{\"CompactMode\":true}"
+                && !Directory.Exists(legacyDir), "The pre-rename settings folder moves to the new name on first launch");
+            check(!AppData.MigrateLegacyFolder(localData), "Migration does nothing once the new folder exists");
+            Directory.CreateDirectory(legacyDir);
+            File.WriteAllText(Path.Combine(legacyDir, "settings.json"), "{\"CompactMode\":false}");
+            check(!AppData.MigrateLegacyFolder(localData)
+                && File.ReadAllText(Path.Combine(AppData.Folder(localData), "settings.json")) == "{\"CompactMode\":true}"
+                && File.Exists(Path.Combine(legacyDir, "settings.json")), "An existing new folder wins and the old one is left untouched");
+
             if (OperatingSystem.IsWindows())
             {
                 var start = new ProcessStartInfo("powershell.exe")

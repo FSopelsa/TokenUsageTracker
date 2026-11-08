@@ -354,7 +354,7 @@ public partial class MainWindow : Window
             bool configured = ClaudeUsage.ConfigureStatusLine(ClaudeUsage.ConfigFolder, Environment.ProcessPath!);
             MessageBox.Show(this, configured
                 ? "Claude Code usage display is connected. Use Claude Code and wait for a response, then refresh the widget. Project or managed status-line settings may override this setup."
-                : "Your custom Claude status line was left unchanged. Forward its original JSON input to CodexUsageWidget.exe --claude-statusline and discard the bridge output. See the Claude setup section in README.md.",
+                : "Your custom Claude status line was left unchanged. Forward its original JSON input to TokenUsageTracker.exe --claude-statusline and discard the bridge output. See the Claude setup section in README.md.",
                 "Claude usage setup", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or ArgumentException)

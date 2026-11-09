@@ -21,8 +21,5 @@ CLAUDE.local.md
 .projectmem/watch.log
 .projectmem/structure.json
 
-# CodeGraph data files — local to each machine, not for committing.
-# Ignore everything in .codegraph/ except this file itself, so transient
-# files (the database, daemon.pid, sockets, logs) never show up in git.
-*
-!.gitignore
+# CodeGraph data files are local to each machine.
+.codegraph/

@@ -11,6 +11,8 @@ The percentages shown in this preview are illustrative. Codex usage comes from t
 - Draggable window with an optional always-on-top setting.
 - Switch between the full layout and a shorter, two-column compact layout; the selected layout is remembered.
 - Remaining usage and reset countdowns for both reported plan windows.
+- A pace forecast on the reset line ("empty ~15:40") when your average pace since the window opened would run out before the reset.
+- For Claude Code, a prompt-cache countdown and the tokens the next prompt re-caches once the cache goes cold.
 - Select **Codex** or **Claude Code** in Options; the selected provider is remembered.
 - Optional automatic continuation of Codex tasks interrupted by a usage limit, with saved **Codex Desktop** or **CLI** target settings.
 - Notification-area icon, remembered position, and refresh every 15 seconds.
@@ -75,7 +77,7 @@ The lists use the reported reset time and window length. If those are unavailabl
 
 Claude Code's [documented status-line data](https://code.claude.com/docs/en/statusline) supplies `rate_limits.five_hour` and `rate_limits.seven_day` for supported subscriptions after a response. These are subscription allowances, separate from context tokens or API dollar costs. An API key or gateway spend limit alone does not provide these subscription windows. Update Claude Code if your version does not report them.
 
-The widget labels Claude readings **Claude Code snapshot**. The timestamp is when the bridge received the data, not the time of a fresh account request; idle sessions may keep sending an older allowance. Closed Claude Code sessions cannot update it. A passed reset becomes unknown until Claude reports a new window. Missing windows never imply a full allowance. Claude Desktop alone does not supply this bridge's updates.
+The widget labels Claude readings **Claude Code snapshot**. The timestamp is when the bridge received the data, not the time of a fresh account request; a session that has not responded yet keeps the last reading, and a lower value for the same window from an idle session is ignored because usage within a window only rises. Closed Claude Code sessions cannot update it. A passed reset becomes unknown until Claude reports a new window. Missing windows never imply a full allowance. Claude Desktop alone does not supply this bridge's updates.
 
 Setup honors `CLAUDE_CONFIG_DIR`, defaulting to `%USERPROFILE%\.claude`. It preserves unrelated settings, backs up the original `settings.json` to `settings.json.usage-widget.bak`, and leaves existing custom status lines untouched. It also sets the status line's `refreshInterval` to 60 seconds (an interval you already set is kept), because Claude Code otherwise stops updating the status line while a session waits on background subagents. If you set up Claude usage with an earlier version, run **Set up Claude usage…** again to add it. Project settings, managed policy, workspace trust, or disabled custom hooks can prevent the user-level bridge from running.
 
@@ -88,7 +90,7 @@ $data = $raw | ConvertFrom-Json
 # Keep your existing rendering here, using $data.
 ```
 
-The bridge stores only allowance percentages, reset times, and a receipt timestamp in `<CLAUDE_CONFIG_DIR>\usage-widget\usage.json`. It does not store session metadata or read Claude credentials. Multiple Claude Code sessions share this local snapshot; the last update that reports usable allowances wins. Updates without them, such as a new session's status line before its first reply, keep the previous reading, shown with its age. If the widget was moved since setup, the Claude status line points to the older copy and the widget asks you to run **Set up Claude usage…** again. To disconnect, remove the widget's `statusLine` entry, or restore your previous status-line value from the backup while keeping later unrelated settings edits.
+The bridge stores only allowance percentages, reset times, the prompt cache's expiry time and re-cache token count, and a receipt timestamp in `<CLAUDE_CONFIG_DIR>\usage-widget\usage.json`. It does not store session metadata or read Claude credentials. Multiple Claude Code sessions share this local snapshot: a window with a new reset time replaces the stored one, and a partial limits update clears any window it does not report. Updates without any usable windows keep the previous reading, shown with its age, unless Claude explicitly reports subscription limits unavailable. The prompt cache shown belongs to the most recently updated session that supplied cache data. The cache line requires Claude Code v2.1.251 or later; in compact mode it appears in the card tooltip. If the widget was moved since setup, the status line points to the older copy and the widget asks you to run **Set up Claude usage…** again. To disconnect, remove the widget's `statusLine` entry, or restore your previous status-line value from the backup while keeping later unrelated settings edits.
 
 Claude support is display-only. Selecting Claude pauses Codex recovery and clears its pending queue; returning to Codex reapplies your saved auto-resume preference and watches for new interruptions.
 
@@ -128,4 +130,4 @@ Build and publish the portable executable:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build.ps1
 ```
 
-The widget shows remaining plan usage; it does not estimate API dollar costs or display token totals. This independent project is not affiliated with OpenAI or Anthropic.
+The widget shows remaining plan usage; it does not estimate API dollar costs. Pace forecasts extrapolate the average pace since the window opened and are not a quota guarantee. This independent project is not affiliated with OpenAI or Anthropic.

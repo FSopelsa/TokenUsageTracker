@@ -131,6 +131,7 @@ internal static class Program
                     "Claude selection updates the window title and visible provider");
                 string claudeInput = System.Text.Json.JsonSerializer.Serialize(new
                 {
+                    prompt_cache = new { expires_at = DateTimeOffset.UtcNow.AddSeconds(100).ToUnixTimeSeconds(), recache_tokens_if_cold = 183402 },
                     rate_limits = new
                     {
                         five_hour = new { used_percentage = 23.5, resets_at = DateTimeOffset.UtcNow.AddHours(4).ToUnixTimeSeconds() },
@@ -152,15 +153,26 @@ internal static class Program
                     "Claude refresh displays both allowances from the status-line snapshot");
                 Check(((System.Windows.Controls.TextBlock)window.FindName("StatusText")).Text.Contains("Claude Code snapshot"),
                     "Claude readings identify themselves as snapshots");
+                Check(((System.Windows.Controls.TextBlock)window.FindName("PrimaryReset")).Text.Contains("empty ~")
+                    && ((System.Windows.Controls.TextBlock)window.FindName("PrimaryReset")).ToolTip.ToString()!.Contains("average pace"),
+                    "Claude window shows its pace forecast and explanation");
+                Check(((System.Windows.Controls.TextBlock)window.FindName("SourceText")).Text.Contains("re-cache ~183k tokens")
+                    && ((System.Windows.Controls.Border)window.FindName("Card")).ToolTip.ToString()!.Contains("most recently updated"),
+                    "Claude cache countdown appears in the footer and compact tooltip");
                 Check(((FrameworkElement)window.FindName("AutoResumeToggle")).Visibility == Visibility.Collapsed,
                     "Claude display hides the unsupported automatic recovery control");
                 Render("window-claude-minimum.png");
                 Call("SetCompact", false, false);
                 Render("window-claude-full.png");
+                ClaudeUsage.ConfigureStatusLine(claudeFolder, "old-widget.exe");
+                Refresh();
+                Check(((System.Windows.Controls.TextBlock)window.FindName("SourceText")).Text.Contains("needs setup"),
+                    "A moved widget's setup warning remains visible when cache data exists");
                 File.Delete(Path.Combine(claudeFolder, "usage-widget", "usage.json"));
                 Refresh();
                 Check(((System.Windows.Controls.ProgressBar)window.FindName("PrimaryBar")).Value == 0
-                    && ((System.Windows.Controls.TextBlock)window.FindName("PrimaryValue")).Text == "—",
+                    && ((System.Windows.Controls.TextBlock)window.FindName("PrimaryValue")).Text == "—"
+                    && ((System.Windows.Controls.TextBlock)window.FindName("PrimaryReset")).ToolTip is null,
                     "Missing Claude data clears the old balance instead of falling back to Codex");
                 settings.Provider = "Codex";
                 Call("UpdateProvider");

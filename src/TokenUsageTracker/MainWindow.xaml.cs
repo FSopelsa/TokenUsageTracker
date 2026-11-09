@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private static readonly Brush Amber = new SolidColorBrush(Color.FromRgb(249, 198, 110));
     private static readonly Brush Red = new SolidColorBrush(Color.FromRgb(255, 132, 132));
     private static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(155, 169, 183));
+    private static readonly Brush SourceDim = new SolidColorBrush(Color.FromRgb(113, 130, 146));
 
     public MainWindow()
     {
@@ -104,8 +105,8 @@ public partial class MainWindow : Window
             var snapshot = result.Snapshot;
             historySnapshot = snapshot;
             bool stale = snapshot is not null && now - snapshot.Timestamp > TimeSpan.FromMinutes(15);
-            ShowWindow(snapshot?.Primary, PrimaryLabel, PrimaryValue, PrimaryBar, PrimaryReset, now, stale);
-            ShowWindow(snapshot?.Secondary, SecondaryLabel, SecondaryValue, SecondaryBar, SecondaryReset, now, stale);
+            ShowWindow(snapshot?.Primary, PrimaryLabel, PrimaryValue, PrimaryBar, PrimaryReset, now, snapshot?.Timestamp ?? now, stale);
+            ShowWindow(snapshot?.Secondary, SecondaryLabel, SecondaryValue, SecondaryBar, SecondaryReset, now, snapshot?.Timestamp ?? now, stale);
             PlanText.Text = snapshot?.Plan?.Replace('_', ' ').ToUpperInvariant() ?? (claude ? "CLAUDE" : "LOCAL");
             string source = claude ? "Claude Code snapshot" : live is not null ? "Live account usage" : lastLive is not null ? "Last live reading" : "Local snapshot";
             string status = snapshot is null ? claude ? "Waiting for Claude Code · see Options" : "Waiting for plan usage"
@@ -135,11 +136,14 @@ public partial class MainWindow : Window
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or OperationCanceledException)
             { recovery = "Recovery paused: " + e.Message; }
             if (lifetime.IsCancellationRequested || !Current()) return;
-            SourceText.Text = claude ? (claudeNeedsSetup ? "Claude status line needs setup · see Options" : "From Claude Code · refreshes every 15s")
-                : settings.AutoResume ? recovery : "Auto-resume off · refreshes every 15s";
+            var cache = claude ? snapshot?.Cache : null;
+            SourceText.Text = claudeNeedsSetup ? "Claude status line needs setup · see Options"
+                : cache?.Describe(now) ?? (claude ? "From Claude Code · refreshes every 15s" : settings.AutoResume ? recovery : "Auto-resume off · refreshes every 15s");
+            SourceText.Foreground = claudeNeedsSetup || cache?.ExpiresAt is { } cold && cold > now && cold - now <= TimeSpan.FromMinutes(2) ? Amber : SourceDim;
             SourceText.TextTrimming = TextTrimming.CharacterEllipsis;
-            SourceText.ToolTip = recovery;
-            string details = $"{source}\n{error ?? result.Error}\n{recovery}\n{folder}";
+            string cacheNote = cache is null ? "" : $"\n{cache.Describe(now)}\nPrompt cache of the most recently updated Claude Code session.";
+            SourceText.ToolTip = recovery + cacheNote;
+            string details = $"{source}\n{error ?? result.Error}\n{recovery}{cacheNote}\n{folder}";
             Card.ToolTip = details;
             StatusText.ToolTip = AutoResumeToggle.ToolTip = details;
             if (!claude && settings.AutoResume && settings.CompactMode)
@@ -157,12 +161,12 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ShowWindow(UsageWindow? w, TextBlock label, TextBlock value, ProgressBar bar, TextBlock reset, DateTimeOffset now, bool stale = false)
+    private void ShowWindow(UsageWindow? w, TextBlock label, TextBlock value, ProgressBar bar, TextBlock reset, DateTimeOffset now, DateTimeOffset readAt, bool stale = false)
     {
         if (w is null)
         {
             value.Text = "—"; value.Foreground = Muted; bar.Value = 0;
-            reset.Text = "No window reported";
+            reset.Text = "No window reported"; reset.ToolTip = null;
             return;
         }
         label.Text = w.Label;
@@ -171,9 +175,14 @@ public partial class MainWindow : Window
         value.Text = expired ? "—" : w.Remaining.ToString("0.#", CultureInfo.CurrentCulture) + "%";
         value.Foreground = bar.Foreground = color;
         bar.Value = expired ? 0 : w.Remaining;
+        var empty = expired ? null : w.RunsOutAt(readAt);
+        if (empty <= now) empty = null; // A stale reading's projection that already passed says nothing useful.
+        string forecast = empty is { } at ? " · empty ~" + (at - now < TimeSpan.FromDays(1) ? "" : at.ToLocalTime().ToString("ddd ", CultureInfo.CurrentCulture))
+            + at.ToLocalTime().ToString("t", CultureInfo.CurrentCulture) : "";
         reset.Text = expired ? "Reset passed · waiting for " + settings.Provider
-            : w.ResetsAt is { } time ? "Resets in " + Countdown(time - now) : "Reset time unavailable";
-        reset.ToolTip = w.ResetsAt?.ToLocalTime().ToString("f");
+            : w.ResetsAt is { } time ? "Resets in " + Countdown(time - now) + forecast : "Reset time unavailable";
+        reset.ToolTip = w.ResetsAt?.ToLocalTime().ToString("f")
+            + (empty is { } e ? $"\nAt the average pace since this window opened, it runs out around {e.ToLocalTime():f}." : "");
     }
 
     private static string Countdown(TimeSpan span) => span.TotalDays >= 1 ? $"{(int)span.TotalDays}d {span.Hours}h"
@@ -329,11 +338,11 @@ public partial class MainWindow : Window
         RefreshButton.ToolTip = settings.Provider == "Claude" ? "Reread Claude Code snapshot (F5)" : "Refresh live usage (F5)";
         AutomationProperties.SetName(RefreshButton, RefreshButton.ToolTip.ToString());
         PrimaryLabel.Text = "5-hour window"; SecondaryLabel.Text = "Weekly window";
-        ShowWindow(null, PrimaryLabel, PrimaryValue, PrimaryBar, PrimaryReset, DateTimeOffset.Now);
-        ShowWindow(null, SecondaryLabel, SecondaryValue, SecondaryBar, SecondaryReset, DateTimeOffset.Now);
+        ShowWindow(null, PrimaryLabel, PrimaryValue, PrimaryBar, PrimaryReset, DateTimeOffset.Now, DateTimeOffset.Now);
+        ShowWindow(null, SecondaryLabel, SecondaryValue, SecondaryBar, SecondaryReset, DateTimeOffset.Now, DateTimeOffset.Now);
         PlanText.Text = settings.Provider.ToUpperInvariant();
         StatusText.Text = "Waiting for " + settings.Provider + " usage";
-        SourceText.Text = "Refreshes every 15s";
+        SourceText.Text = "Refreshes every 15s"; SourceText.Foreground = SourceDim;
         Card.ToolTip = null;
         UpdateResponsiveLayout();
     }

@@ -7,6 +7,8 @@ namespace TokenUsageTracker;
 public partial class App : Application
 {
     private Mutex? instance;
+    private EventWaitHandle? showRequest;
+    private RegisteredWaitHandle? showListener;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -18,13 +20,26 @@ public partial class App : Application
             return;
         }
         instance = new Mutex(true, @"Local\CodexUsageWidget", out bool first);
-        if (!first) { Shutdown(); return; }
-        MainWindow = new MainWindow();
-        MainWindow.Show();
+        // A second launch (Start menu, pinned taskbar button, sign-in entry) brings the running widget forward.
+        showRequest = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\CodexUsageWidget.Show");
+        if (!first)
+        {
+            WindowsShell.AllowSetForegroundWindow(WindowsShell.ASFW_ANY);
+            showRequest.Set();
+            Shutdown();
+            return;
+        }
+        var window = new MainWindow();
+        MainWindow = window;
+        showListener = ThreadPool.RegisterWaitForSingleObject(showRequest,
+            (_, _) => Dispatcher.BeginInvoke(window.RestoreWidget), null, Timeout.Infinite, executeOnlyOnce: false);
+        window.Show();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        showListener?.Unregister(null);
+        showRequest?.Dispose();
         instance?.Dispose();
         base.OnExit(e);
     }

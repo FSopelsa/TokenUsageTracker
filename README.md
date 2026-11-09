@@ -47,6 +47,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build.ps1 -Runtime w
 - Select **⋯** or right-click the widget to refresh, open the Codex usage dashboard, choose a data folder, hide to the notification area, or quit.
 - Press **F5** to refresh usage or **Esc** to hide. Double-click the notification-area icon to show the widget again.
 
+### Taskbar and Start
+
+Windows 11 does not let apps draw their own content in the taskbar or Start menu. Instead, the widget uses the parts Windows provides:
+
+- **Notification-area icon:** shows the remaining percentage as a coloured number: green above 25%, amber at 25% or less, red at 10% or less. The number is the lower of the two windows, rounded down. Hover for both windows and the reading's age. With no usable reading, it shows the app icon.
+- **Taskbar button:** shows the same reading as a progress bar (green, yellow, red) with the number as an overlay badge. The widget has a taskbar button by default. Turn it off with **⋯ → Taskbar and Start → Show on taskbar**. Hiding the widget with **Esc** removes the button until you show it again.
+- **Start menu:** **⋯ → Taskbar and Start → Start menu shortcut** creates a Start menu shortcut for this copy of the widget. Windows does not let apps pin themselves. To pin it, open Start, right-click **Codex Usage Widget**, and choose **Pin to Start** or **Pin to taskbar**. You can also right-click the running widget's taskbar button and choose **Pin to taskbar**.
+- **Start with Windows:** **⋯ → Taskbar and Start → Start with Windows** starts the widget when you sign in. It adds an entry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. You can also turn it off in Task Manager under **Startup apps**.
+
+Launching the widget again, for example from Start or a pinned button, shows the running widget instead of starting a second one. The Start menu shortcut and the sign-in entry point to the executable's current location. After you move the executable, select both items again.
+
 ## Automatic continuation
 
 Auto-resume is **off by default**. While enabled, the widget watches root chats in the selected Codex data folder for structured usage-limit failures. When Codex confirms that included usage is available, it sends a continuation to the exact interrupted chat. Weekly limits also block recovery; an elapsed countdown alone never starts work. Older Codex versions that do not report `ordinaryUsageAllowed` can display usage but cannot authorize automatic recovery.

@@ -14,6 +14,7 @@ A Windows WPF widget (`src/TokenUsageTracker`, `net10.0-windows`) that shows rem
 - Codex: `CodexClient.cs` (app-server JSON-RPC: `account/read`, `account/rateLimits/read`, and the Desktop proxy socket), `UsageReader.cs` (session logs), `ResumeController.cs` (auto-resume), `TaskHistory.cs` (local task ranking).
 - Claude Code: `ClaudeUsage.cs` is the status-line bridge. It writes `usage-widget/usage.json` under `CLAUDE_CONFIG_DIR` (default `~/.claude`) and sets a `statusLine` in the user's Claude `settings.json`.
 - UI: `MainWindow.xaml`, `MainWindow*.cs`.
+- Taskbar and Start: `TaskbarReading.cs` (which number and colour to show; covered by the usage checks), `TrayBadge.cs` (draws the number icon), `WindowsShell.cs` (Start menu shortcut, `HKCU\...\Run` sign-in entry). Window checks must not call `WindowsShell` setters, because they change the real Start menu and registry.
 - Design notes: `docs/superpowers/specs/`.
 - `.projectmem/` is generated memory for AI sessions and is partly stale. The code and `README.md` are authoritative.
 

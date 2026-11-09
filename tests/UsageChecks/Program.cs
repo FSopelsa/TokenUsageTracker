@@ -93,6 +93,7 @@ finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
 await ResumeChecks.RunAsync(Check);
 await ClaudeChecks.RunAsync(Check);
 TaskHistoryChecks.Run(Check);
+TaskbarChecks.Run(Check);
 
 if (args.Contains("--live-rpc"))
 {

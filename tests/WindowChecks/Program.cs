@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Shell;
 using System.Windows.Threading;
 using TokenUsageTracker;
 
@@ -150,6 +151,13 @@ internal static class Program
                 Check(((System.Windows.Controls.ProgressBar)window.FindName("PrimaryBar")).Value == 76.5
                     && ((System.Windows.Controls.ProgressBar)window.FindName("SecondaryBar")).Value == 58.8,
                     "Claude refresh displays both allowances from the status-line snapshot");
+                var taskbar = window.TaskbarItemInfo;
+                string TrayText() => (string)Field("tray").GetType().GetProperty("Text")!.GetValue(Field("tray"))!;
+                Check(taskbar.ProgressState == TaskbarItemProgressState.Normal && Math.Abs(taskbar.ProgressValue - 0.588) < 1e-9
+                    && taskbar.Overlay is BitmapSource && typeof(MainWindow).GetField("badge", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window) is not null,
+                    "Taskbar button shows the tighter Claude window as progress with a number badge");
+                Check(TrayText().StartsWith("Claude: 5-hour", StringComparison.Ordinal) && TrayText().Contains("Weekly"),
+                    "Tray tooltip lists both Claude windows");
                 Check(((System.Windows.Controls.TextBlock)window.FindName("StatusText")).Text.Contains("Claude Code snapshot"),
                     "Claude readings identify themselves as snapshots");
                 Check(((FrameworkElement)window.FindName("AutoResumeToggle")).Visibility == Visibility.Collapsed,
@@ -162,6 +170,9 @@ internal static class Program
                 Check(((System.Windows.Controls.ProgressBar)window.FindName("PrimaryBar")).Value == 0
                     && ((System.Windows.Controls.TextBlock)window.FindName("PrimaryValue")).Text == "—",
                     "Missing Claude data clears the old balance instead of falling back to Codex");
+                Check(window.TaskbarItemInfo.ProgressState == TaskbarItemProgressState.None && window.TaskbarItemInfo.Overlay is null
+                    && typeof(MainWindow).GetField("badge", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window) is null,
+                    "Missing Claude data clears the taskbar progress and tray number");
                 settings.Provider = "Codex";
                 Call("UpdateProvider");
                 Check(window.Title == "Codex Usage" && ((System.Windows.Controls.TextBlock)window.FindName("PrimaryValue")).Text == "—",
@@ -172,6 +183,21 @@ internal static class Program
                 Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", previousFolder);
                 System.Threading.SynchronizationContext.SetSynchronizationContext(previousContext);
                 if (Directory.Exists(claudeFolder)) Directory.Delete(claudeFolder, recursive: true);
+            }
+            var badgeType = typeof(MainWindow).Assembly.GetType("TokenUsageTracker.TrayBadge")!;
+            foreach (string text in new[] { "0", "58", "100" })
+            {
+                var rendered = (IDisposable)badgeType.GetMethod("Render")!.Invoke(null, new object[] { text, UsageLevel.Critical, 16 })!;
+                var image = (BitmapSource)badgeType.GetProperty("Image")!.GetValue(rendered)!;
+                Check(image.PixelWidth == 16 && image.PixelHeight == 16, $"Tray badge \"{text}\" renders at the small icon size");
+                if (text == "100")
+                {
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(image));
+                    using var output = File.Create(Path.Combine(".build", "tray-badge-100.png"));
+                    encoder.Save(output);
+                }
+                rendered.Dispose();
             }
             Check(!window.IsLoaded, "Window checks never start account polling or task recovery");
             Console.WriteLine($"All {checks} window checks passed.");

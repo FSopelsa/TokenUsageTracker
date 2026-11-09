@@ -12,6 +12,7 @@ public sealed class WidgetSettings
     public double? Left { get; set; }
     public double? Top { get; set; }
     public bool AlwaysOnTop { get; set; } = true;
+    public bool ShowInTaskbar { get; set; } = true;
     public bool CompactMode { get; set; }
     public string Provider { get; set; } = "Codex";
     public double? FullWidth { get; set; }

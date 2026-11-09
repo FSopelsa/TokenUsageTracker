@@ -12,5 +12,6 @@
     <Compile Include="../../src/TokenUsageTracker/ResumeController.cs" Link="ResumeController.cs" />
     <Compile Include="../../src/TokenUsageTracker/ClaudeUsage.cs" Link="ClaudeUsage.cs" />
     <Compile Include="../../src/TokenUsageTracker/TaskHistory.cs" Link="TaskHistory.cs" />
+    <Compile Include="../../src/TokenUsageTracker/TaskbarReading.cs" Link="TaskbarReading.cs" />
   </ItemGroup>
 </Project>

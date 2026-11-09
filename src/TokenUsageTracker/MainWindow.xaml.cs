@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -10,6 +11,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shell;
 using System.Windows.Threading;
 using Forms = System.Windows.Forms;
 
@@ -24,6 +26,9 @@ public partial class MainWindow : Window
     private LiveUsage? lastLive;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(15) };
     private readonly Forms.NotifyIcon tray;
+    private readonly System.Drawing.Icon appIcon;
+    private TrayBadge? badge;
+    private TaskbarReading shownReading = TaskbarReading.Empty;
     private bool reading;
     private static readonly Brush Green = new SolidColorBrush(Color.FromRgb(190, 240, 120));
     private static readonly Brush Amber = new SolidColorBrush(Color.FromRgb(249, 198, 110));
@@ -33,6 +38,10 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        appIcon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!) ?? System.Drawing.SystemIcons.Information;
+        tray = new Forms.NotifyIcon { Text = "Codex Usage — double-click to show", Icon = appIcon, Visible = true };
+        TaskbarItemInfo = new TaskbarItemInfo();
+        ShowInTaskbar = settings.ShowInTaskbar;
         if (settings.Provider is not ("Codex" or "Claude")) settings.Provider = "Codex";
         if (settings.ResumeTarget is not ("Desktop" or "CLI")) settings.ResumeTarget = "Desktop";
         AutoResumeToggle.IsChecked = settings.AutoResume;
@@ -41,12 +50,6 @@ public partial class MainWindow : Window
         UpdateProvider();
         SizeChanged += (_, _) => UpdateResponsiveLayout();
         UpdatePin();
-        tray = new Forms.NotifyIcon
-        {
-            Text = "Codex Usage — double-click to show",
-            Icon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!) ?? System.Drawing.SystemIcons.Information,
-            Visible = true
-        };
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("Show widget", null, (_, _) => Dispatcher.Invoke(RestoreWidget));
         menu.Items.Add("Refresh usage", null, (_, _) => Dispatcher.Invoke(async () => await RefreshAsync()));
@@ -61,7 +64,7 @@ public partial class MainWindow : Window
             timer.Start();
             await RefreshAsync();
         };
-        Closed += (_, _) => { timer.Stop(); lifetime.Cancel(); resume.Dispose(); tray.Dispose(); };
+        Closed += (_, _) => { timer.Stop(); lifetime.Cancel(); resume.Dispose(); tray.Dispose(); badge?.Dispose(); appIcon.Dispose(); };
         Closing += (_, _) => SaveSettings();
         MouseRightButtonUp += (_, e) => { ShowMenu(); e.Handled = true; };
     }
@@ -146,9 +149,7 @@ public partial class MainWindow : Window
                 StatusText.Text = $"{PlanText.Text} · " + (recovery.StartsWith("Desktop connection unavailable", StringComparison.Ordinal)
                     ? "Desktop connection unavailable" : $"{source} · {resume.PendingCount} pending");
             ToolTip = null;
-            tray.Text = snapshot?.Primary is { } w && !w.IsExpired(now)
-                ? $"{provider}: {w.Remaining:0.#}% left — {Age(now - snapshot.Timestamp)} ago"
-                : $"{provider} Usage — open widget for status";
+            ShowOnTaskbar(provider, snapshot, now);
         }
         finally
         {
@@ -167,13 +168,42 @@ public partial class MainWindow : Window
         }
         label.Text = w.Label;
         bool expired = w.IsExpired(now);
-        Brush color = expired || stale ? Muted : w.Remaining <= 10 ? Red : w.Remaining <= 25 ? Amber : Green;
+        Brush color = expired || stale ? Muted : TaskbarReading.LevelOf(w.Remaining) switch { UsageLevel.Critical => Red, UsageLevel.Low => Amber, _ => Green };
         value.Text = expired ? "—" : w.Remaining.ToString("0.#", CultureInfo.CurrentCulture) + "%";
         value.Foreground = bar.Foreground = color;
         bar.Value = expired ? 0 : w.Remaining;
         reset.Text = expired ? "Reset passed · waiting for " + settings.Provider
             : w.ResetsAt is { } time ? "Resets in " + Countdown(time - now) : "Reset time unavailable";
         reset.ToolTip = w.ResetsAt?.ToLocalTime().ToString("f");
+    }
+
+    /// <summary>Taskbar button progress and overlay, plus the notification-area number, from the tighter usable window.</summary>
+    private void ShowOnTaskbar(string provider, UsageSnapshot? snapshot, DateTimeOffset now)
+    {
+        var reading = TaskbarReading.From(snapshot, now);
+        tray.Text = TaskbarReading.TrayText(provider, snapshot, now, snapshot is null ? "" : Age(now - snapshot.Timestamp));
+        TaskbarItemInfo.Description = tray.Text;
+        TaskbarItemInfo.ProgressState = reading.Level switch
+        {
+            UsageLevel.Normal => TaskbarItemProgressState.Normal,
+            UsageLevel.Low => TaskbarItemProgressState.Paused,
+            UsageLevel.Critical => TaskbarItemProgressState.Error,
+            _ => TaskbarItemProgressState.None
+        };
+        TaskbarItemInfo.ProgressValue = reading.Fraction;
+        if (reading.Badge == shownReading.Badge && reading.Level == shownReading.Level) return;
+        var previous = badge;
+        badge = null;
+        try
+        {
+            if (reading.Level != UsageLevel.None)
+                badge = TrayBadge.Render(reading.Badge, reading.Level, Forms.SystemInformation.SmallIconSize.Width);
+        }
+        catch (Exception e) when (e is ArgumentException or ExternalException) { badge = null; }
+        tray.Icon = badge?.Icon ?? appIcon;
+        TaskbarItemInfo.Overlay = badge?.Image;
+        shownReading = badge is null ? TaskbarReading.Empty : reading;
+        previous?.Dispose();
     }
 
     private static string Countdown(TimeSpan span) => span.TotalDays >= 1 ? $"{(int)span.TotalDays}d {span.Hours}h"
@@ -220,7 +250,7 @@ public partial class MainWindow : Window
         if (!settings.Save()) { StatusText.Text = "Could not save preferences"; StatusText.ToolTip = "Check LocalAppData write permissions."; }
     }
 
-    private void RestoreWidget() { Show(); WindowState = WindowState.Normal; RestorePosition(); Activate(); }
+    internal void RestoreWidget() { Show(); WindowState = WindowState.Normal; RestorePosition(); Activate(); }
     private void UpdatePin() { PinButton.Foreground = Topmost ? Green : Muted; PinButton.ToolTip = Topmost ? "Always on top: on" : "Always on top: off"; }
     private void ToggleCompact(object sender, RoutedEventArgs e) => SetCompact(!settings.CompactMode, save: true);
 
@@ -332,6 +362,7 @@ public partial class MainWindow : Window
         ShowWindow(null, PrimaryLabel, PrimaryValue, PrimaryBar, PrimaryReset, DateTimeOffset.Now);
         ShowWindow(null, SecondaryLabel, SecondaryValue, SecondaryBar, SecondaryReset, DateTimeOffset.Now);
         PlanText.Text = settings.Provider.ToUpperInvariant();
+        ShowOnTaskbar(settings.Provider, null, DateTimeOffset.Now);
         StatusText.Text = "Waiting for " + settings.Provider + " usage";
         SourceText.Text = "Refreshes every 15s";
         Card.ToolTip = null;
@@ -401,10 +432,40 @@ public partial class MainWindow : Window
             });
             Add("Use default Codex folder", () => { settings.CodexFolder = null; lastLive = null; ConfigureResume(); });
         }
+        menu.Items.Add(WindowsMenu());
         menu.Items.Add(new Separator());
         Add("Hide to tray  (Esc)", Hide);
         Add("Quit", Close);
         menu.PlacementTarget = this; menu.IsOpen = true;
+    }
+
+    private MenuItem WindowsMenu()
+    {
+        string exe = Environment.ProcessPath!;
+        var windows = new MenuItem { Header = "Taskbar and Start" };
+        void Toggle(string header, bool isChecked, Action<bool> apply)
+        {
+            var item = new MenuItem { Header = header, IsCheckable = true, IsChecked = isChecked };
+            item.Click += (_, _) =>
+            {
+                try { apply(item.IsChecked); }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException or ExternalException)
+                { MessageBox.Show(this, e.Message, "Taskbar and Start", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            };
+            windows.Items.Add(item);
+        }
+        Toggle("Show on taskbar", ShowInTaskbar, on => { settings.ShowInTaskbar = ShowInTaskbar = on; SaveSettings(); });
+        bool startup = false, shortcut = false;
+        try { startup = WindowsShell.StartsWithWindows(exe); shortcut = WindowsShell.HasStartMenuShortcut(exe); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException or ExternalException) { }
+        Toggle("Start with Windows", startup, on => WindowsShell.SetStartsWithWindows(exe, on));
+        Toggle("Start menu shortcut", shortcut, on =>
+        {
+            WindowsShell.SetStartMenuShortcut(exe, on);
+            if (on) MessageBox.Show(this, "Codex Usage Widget is now in the Start menu. To pin it, open Start, find Codex Usage Widget under All, right-click it, and choose Pin to Start or Pin to taskbar.",
+                "Taskbar and Start", MessageBoxButton.OK, MessageBoxImage.Information);
+        });
+        return windows;
     }
 
     private async void OnKeyDown(object sender, KeyEventArgs e)

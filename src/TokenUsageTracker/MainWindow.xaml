@@ -44,7 +44,7 @@
       <Grid x:Name="LayoutGrid">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-        <RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
       <Grid x:Name="Header" MouseLeftButtonDown="DragWidget" Background="Transparent" Cursor="SizeAll">
         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
@@ -66,7 +66,7 @@
         </StackPanel>
       </Grid>
       <Grid x:Name="PlanRow" Grid.Row="1" Margin="0,19,0,0">
-        <TextBlock Text="PLAN REMAINING" Foreground="#9BA9B7" FontSize="10" FontWeight="SemiBold" />
+        <TextBlock x:Name="PlanLabel" Text="PLAN REMAINING" Foreground="#9BA9B7" FontSize="10" FontWeight="SemiBold" />
         <TextBlock x:Name="PlanText" Text="LOCAL" Foreground="#BEF078" FontSize="10" HorizontalAlignment="Right" />
       </Grid>
       <Grid x:Name="UsageGrid" Grid.Row="2">
@@ -91,12 +91,39 @@
         <TextBlock x:Name="SecondaryReset" Text="Waiting for Codex" FontSize="11" Foreground="#8F9FAF" Margin="0,7,0,0" TextTrimming="CharacterEllipsis" />
       </StackPanel>
       </Grid>
-      <Grid x:Name="TaskLists" Grid.Row="3" Margin="0,9,0,0">
+      <StackPanel x:Name="ClaudeBlock" Grid.Row="3" Visibility="Collapsed">
+        <Grid x:Name="ClaudePlanRow" Margin="0,14,0,0">
+          <TextBlock Text="CLAUDE" Foreground="#9BA9B7" FontSize="10" FontWeight="SemiBold" />
+          <TextBlock x:Name="ClaudePlanText" Text="CLAUDE" Foreground="#6FD8C0" FontSize="10" HorizontalAlignment="Right" />
+        </Grid>
+        <Grid x:Name="ClaudeGrid">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+          <StackPanel x:Name="ClaudePrimaryPanel" Margin="0,3,8,0">
+            <Grid x:Name="ClaudePrimaryHeading">
+              <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="0" /></Grid.RowDefinitions>
+              <TextBlock x:Name="ClaudePrimaryLabel" Text="5-hour window" FontSize="12" Foreground="#ACB8C5" VerticalAlignment="Center" />
+              <TextBlock x:Name="ClaudePrimaryValue" Text="—" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Right" />
+            </Grid>
+            <ProgressBar x:Name="ClaudePrimaryBar" Margin="0,5,0,0" AutomationProperties.Name="Claude five-hour window remaining percent" />
+            <TextBlock x:Name="ClaudePrimaryReset" Text="Waiting for Claude" FontSize="11" Foreground="#8F9FAF" Margin="0,7,0,0" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <StackPanel x:Name="ClaudeSecondaryPanel" Grid.Column="1" Margin="8,3,0,0">
+            <Grid x:Name="ClaudeSecondaryHeading">
+              <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="0" /></Grid.RowDefinitions>
+              <TextBlock x:Name="ClaudeSecondaryLabel" Text="Weekly window" FontSize="12" Foreground="#ACB8C5" VerticalAlignment="Center" />
+              <TextBlock x:Name="ClaudeSecondaryValue" Text="—" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Right" />
+            </Grid>
+            <ProgressBar x:Name="ClaudeSecondaryBar" Margin="0,5,0,0" AutomationProperties.Name="Claude weekly window remaining percent" />
+            <TextBlock x:Name="ClaudeSecondaryReset" Text="Waiting for Claude" FontSize="11" Foreground="#8F9FAF" Margin="0,7,0,0" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+      <Grid x:Name="TaskLists" Grid.Row="4" Margin="0,9,0,0">
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Button x:Name="FiveHourTasks" Content="5h tasks ▾" Width="Auto" Height="26" FontSize="11" HorizontalAlignment="Stretch" Click="OpenTasks" AutomationProperties.Name="Show tasks in the five-hour window" ToolTip="Local tasks ranked by tokens. Hover for a summary; click for details."/>
+        <Button x:Name="FiveHourTasks" Content="5h tasks ▾" Width="Auto" Height="26" FontSize="11" HorizontalAlignment="Stretch" Click="OpenTasks" AutomationProperties.Name="Show tasks in the five-hour window" ToolTip="Local Codex and Claude Code tasks ranked by tokens. Hover for a summary; click for details."/>
         <Button x:Name="WeeklyTasks" Grid.Column="1" Content="Weekly tasks ▾" Width="Auto" Height="26" FontSize="11" HorizontalAlignment="Stretch" Click="OpenTasks" AutomationProperties.Name="Show tasks in the weekly window" ToolTip="Local tasks ranked by tokens. Percentage points are estimates."/>
       </Grid>
-      <Border x:Name="Footer" Grid.Row="5" BorderBrush="#303A45" BorderThickness="0,1,0,0" Padding="0,11,0,0" Margin="0,14,0,0">
+      <Border x:Name="Footer" Grid.Row="6" BorderBrush="#303A45" BorderThickness="0,1,0,0" Padding="0,11,0,0" Margin="0,14,0,0">
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="28" /></Grid.ColumnDefinitions>
           <StackPanel VerticalAlignment="Center">

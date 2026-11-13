@@ -1,6 +1,6 @@
 # Token Usage Tracker for Windows
 
-A small desktop widget that shows the remaining usage in your Codex or Claude plan, including reset times for the current and weekly windows.
+A small desktop widget that shows the remaining usage in your Codex plan, your Claude plan, or both side by side, including reset times for the current and weekly windows.
 
 ![Preview of Token Usage Tracker](docs/preview.png)
 
@@ -13,8 +13,9 @@ The percentages shown in this preview are illustrative. Codex usage comes from t
 - Remaining usage and reset countdowns for both reported plan windows.
 - A pace forecast on the reset line ("empty ~15:40") when your average pace since the window opened would run out before the reset.
 - For Claude Code, a prompt-cache countdown and the tokens the next prompt re-caches once the cache goes cold.
-- Select **Codex** or **Claude Code** in Options; the selected provider is remembered.
+- Select **Codex**, **Claude Code**, or **Codex and Claude Code** in Options; the selected provider is remembered.
 - Optional automatic continuation of Codex tasks interrupted by a usage limit, with saved **Codex Desktop** or **CLI** target settings.
+- A notification when a Claude Code session stopped by a usage limit can continue, with its resume command ready to paste.
 - Notification-area icon, remembered position, and refresh every 15 seconds.
 - Uses existing Codex and Claude Code sign-ins; no API key required.
 
@@ -49,6 +50,27 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build.ps1 -Runtime w
 - Select **⋯** or right-click the widget to refresh, open the Codex usage dashboard, choose a data folder, hide to the notification area, or quit.
 - Press **F5** to refresh usage or **Esc** to hide. Double-click the notification-area icon to show the widget again.
 
+### Codex and Claude Code together
+
+Select **⋯ → Usage provider → Codex and Claude Code** to see both tools in one widget. Each tool gets a row with its 5-hour and weekly windows next to each other, Codex on top. A tool is blocked by whichever of its own windows runs out first, so its two numbers sit side by side.
+
+- The percentage text always shows the warning level: green above 25%, amber at 25% or less, red at 10% or less.
+- The bars tell the tools apart. Codex bars keep the warning colours; Claude bars use their own shades of the same levels (mint, orange, rose).
+- Full-size mode shows reset times and pace forecasts. Compact mode shows only the percentages and bars, with the tool named in each label.
+- The footer shows how recent each tool's reading is. If one tool cannot be read, the other keeps its numbers.
+- This mode remembers its own window size, separate from the single-tool layouts. Full-size mode can shrink to 380 × 370 and compact mode to 300 × 160.
+
+### Taskbar and Start
+
+Windows 11 does not let apps draw their own content in the taskbar or Start menu. Instead, the widget uses the parts Windows provides:
+
+- **Notification-area icon:** shows the remaining percentage as a coloured number: green above 25%, amber at 25% or less, red at 10% or less. The number is the lower of the two windows, rounded down. Hover for both windows and the reading's age. With no usable reading, it shows the app icon. With both tools shown there are two icons: Codex as a rounded square and Claude as a circle in its own shades. Windows decides the order of tray icons, so the shape tells them apart.
+- **Taskbar button:** shows the same reading as a progress bar (green, yellow, red) with the number as an overlay badge. With both tools shown, it follows whichever tool has less room left. The widget has a taskbar button by default. Turn it off with **⋯ → Taskbar and Start → Show on taskbar**. Hiding the widget with **Esc** removes the button until you show it again.
+- **Start menu:** **⋯ → Taskbar and Start → Start menu shortcut** creates a Start menu shortcut for this copy of the widget. Windows does not let apps pin themselves. To pin it, open Start, right-click **Token Usage Tracker**, and choose **Pin to Start** or **Pin to taskbar**. You can also right-click the running widget's taskbar button and choose **Pin to taskbar**.
+- **Start with Windows:** **⋯ → Taskbar and Start → Start with Windows** starts the widget when you sign in. It adds an entry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. You can also turn it off in Task Manager under **Startup apps**.
+
+Launching the widget again, for example from Start or a pinned button, shows the running widget instead of starting a second one. The Start menu shortcut and the sign-in entry point to the executable's current location. After you move the executable, select both items again.
+
 ## Automatic continuation
 
 Auto-resume is **off by default**. While enabled, the widget watches root chats in the selected Codex data folder for structured usage-limit failures. When Codex confirms that included usage is available, it sends a continuation to the exact interrupted chat. Weekly limits also block recovery; an elapsed countdown alone never starts work. Older Codex versions that do not report `ordinaryUsageAllowed` can display usage but cannot authorize automatic recovery.
@@ -63,11 +85,13 @@ Recovery state survives widget restarts. If a crash makes delivery uncertain, th
 
 ## Task history in full-size mode
 
-Open **5h tasks ▾** or **Weekly tasks ▾** for local Codex prompts ranked by recorded tokens. Hover for a summary; click for the original prompt, recorded completion, model, token breakdown, tool activity and linked agent subtasks. Prompts stay local; task names are shortened from the prompt without an extra model request.
+Open **5h tasks ▾** or **Weekly tasks ▾** for local Codex or Claude Code prompts ranked by recorded tokens. With both tools shown, the list has a Codex group and a Claude Code group, each estimated against its own tool's window. Hover for a summary; click for the original prompt, recorded completion, model, token breakdown, tool activity and linked agent subtasks. Prompts stay local; task names are shortened from the prompt without an extra model request.
 
 The lists use the reported reset time and window length. If those are unavailable or expired, they show a labelled rolling five-hour/seven-day lookback. Tasks crossing a boundary include only responses recorded inside that window. Cached input is included in input tokens, and reasoning is included in output tokens; neither is counted twice. Older logs use differences between cumulative counters. A task without token records is shown with an unknown cost.
 
-**Percentage points are estimates**, calculated as a task's token share among local tasks multiplied by reported window usage. Codex does not provide an exact per-task quota charge or fixed subscription token budget. Model weights, caching, other devices/accounts and missing local sessions can make this allocation inaccurate. These are not API prices. Claude status-line snapshots do not contain task history, so these lists are available for Codex only.
+**Percentage points are estimates**, calculated as a task's token share among local tasks multiplied by reported window usage. Codex does not provide an exact per-task quota charge or fixed subscription token budget. Model weights, caching, other devices/accounts and missing local sessions can make this allocation inaccurate. These are not API prices.
+
+Claude Code tasks come from the transcripts under `%USERPROFILE%\.claude\projects` (or `CLAUDE_CONFIG_DIR`). A task is one prompt and the replies that follow it, including the subagents it started. Input counts fresh input, cache writes and cache reads; the details window shows cache reads separately. Cache reads may count less toward Claude limits than other tokens, so estimates for long-context tasks can be too high.
 
 ## Claude Code setup on Windows
 
@@ -92,13 +116,24 @@ $data = $raw | ConvertFrom-Json
 
 The bridge stores only allowance percentages, reset times, the prompt cache's expiry time and re-cache token count, and a receipt timestamp in `<CLAUDE_CONFIG_DIR>\usage-widget\usage.json`. It does not store session metadata or read Claude credentials. Multiple Claude Code sessions share this local snapshot: a window with a new reset time replaces the stored one, and a partial limits update clears any window it does not report. Updates without any usable windows keep the previous reading, shown with its age, unless Claude explicitly reports subscription limits unavailable. The prompt cache shown belongs to the most recently updated session that supplied cache data. The cache line requires Claude Code v2.1.251 or later; in compact mode it appears in the card tooltip. If the widget was moved since setup, the status line points to the older copy and the widget asks you to run **Set up Claude usage…** again. To disconnect, remove the widget's `statusLine` entry, or restore your previous status-line value from the backup while keeping later unrelated settings edits.
 
-Claude support is display-only. Selecting Claude pauses Codex recovery and clears its pending queue; returning to Codex reapplies your saved auto-resume preference and watches for new interruptions.
+Claude support does not start work on its own. Selecting Claude alone pauses Codex recovery and clears its pending queue; returning to Codex or to both tools reapplies your saved auto-resume preference and watches for new interruptions.
+
+### Continuing a Claude Code session after a usage limit
+
+When a usage limit stops a Claude Code session, the widget notices the error at the end of that session's transcript. Once the limit has reset, it shows a Windows notification that names the task and its folder. Click the notification to copy a PowerShell command that opens the folder and runs `claude --resume <session>`, then paste it into a terminal.
+
+- The notification waits until every window that was full has reset, or until Claude Code reports room in a newer reading. A countdown alone never triggers it.
+- Each interruption is announced once. A new prompt in that session cancels the notice.
+- **⋯ → Claude sessions to resume** lists the sessions that can continue, with **Copy resume command** and **Dismiss**.
+- Turn notices off with **⋯ → Notify when Claude can continue**. Interruptions from before you turned them on are ignored.
+
+The widget never runs Claude Code itself. Recognising the usage-limit error relies on its wording in the transcript, which has not been confirmed against a real example yet.
 
 ## Usage data and privacy
 
 Live usage requires an installed Codex executable and an existing ChatGPT sign-in. The widget discovers native CLI executables on `PATH`, in the standard Codex Desktop installation, or in an npm installation. Codex handles authentication and account requests through its [app-server protocol](https://learn.chatgpt.com/docs/app-server).
 
-By default, local session records come from `%USERPROFILE%\.codex\sessions`. The widget honors `CODEX_HOME`; **Choose Codex data folder** selects another Codex home for both live reads and session monitoring. Settings and recovery metadata stay in `%LOCALAPPDATA%\TokenUsageTracker`, outside the repository. An existing `%LOCALAPPDATA%\CodexUsageWidget` folder from before the rename is moved there on first launch. Recovery stores chat and turn identifiers, workspace and execution settings, and a hashed account identifier; it does not copy chat transcripts or credentials.
+By default, local session records come from `%USERPROFILE%\.codex\sessions`. The widget honors `CODEX_HOME`; **Choose Codex data folder** selects another Codex home for both live reads and session monitoring. Settings and recovery metadata stay in `%LOCALAPPDATA%\TokenUsageTracker`, outside the repository. An existing `%LOCALAPPDATA%\CodexUsageWidget` folder from before the rename is moved there on first launch. Recovery stores chat and turn identifiers, workspace and execution settings, and a hashed account identifier; it does not copy chat transcripts or credentials. Claude notices store only session and error identifiers in `claude-resume.json` in the same folder. Claude Code transcripts are read locally for task lists and notices and are never copied or sent anywhere; the widget does not open Claude credentials.
 
 The widget does not open `auth.json` or collect authentication tokens. Codex makes the authenticated network requests. With auto-resume enabled, Codex may execute work in the interrupted task's workspace. The dashboard opens in a browser only when selected.
 

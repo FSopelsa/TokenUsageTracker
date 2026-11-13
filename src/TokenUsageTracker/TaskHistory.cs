@@ -54,10 +54,16 @@ public sealed class TaskHistory
     public const string EstimateNote = "Estimated pp = task share of locally recorded tokens × reported window usage. Models and cached tokens consume quota differently. Missing chats, devices or accounts make this incomplete; exact per-task quota cost is not reported.";
     private readonly Dictionary<string, (long Length, DateTime Modified, List<UsageTask> Tasks)> cache = new();
 
+    /// <summary>The start of the reported window when it is current, otherwise a rolling lookback.</summary>
+    public static (DateTimeOffset Start, bool Exact) WindowStart(UsageWindow? window, int fallbackMinutes, DateTimeOffset now)
+    {
+        bool exact = window?.Minutes is > 0 && window.ResetsAt is { } reset && reset > now && reset.AddMinutes(-window.Minutes.Value) <= now;
+        return (exact ? window!.ResetsAt!.Value.AddMinutes(-window.Minutes!.Value) : now.AddMinutes(-fallbackMinutes), exact);
+    }
+
     public TaskRanking Read(string home, UsageWindow? window, int fallbackMinutes, DateTimeOffset now)
     {
-        bool exactWindow = window?.Minutes is > 0 && window.ResetsAt is { } reset && reset > now && reset.AddMinutes(-window.Minutes.Value) <= now;
-        DateTimeOffset start = exactWindow ? window!.ResetsAt!.Value.AddMinutes(-window.Minutes!.Value) : now.AddMinutes(-fallbackMinutes);
+        var (start, exactWindow) = WindowStart(window, fallbackMinutes, now);
         var tasks = new List<UsageTask>();
         bool incomplete = false;
         try
@@ -209,5 +215,5 @@ public sealed class TaskHistory
         return tasks.Values.ToList();
     }
 
-    private static long Number(JsonElement value, string key) { var n = Json.Get(value, key); return n.ValueKind == JsonValueKind.Number && n.TryGetInt64(out long count) && count >= 0 && count <= long.MaxValue / 1000 ? count : 0; }
+    internal static long Number(JsonElement value, string key) { var n = Json.Get(value, key); return n.ValueKind == JsonValueKind.Number && n.TryGetInt64(out long count) && count >= 0 && count <= long.MaxValue / 1000 ? count : 0; }
 }

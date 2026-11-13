@@ -24,7 +24,11 @@ internal sealed class TrayBadge : IDisposable
         Image = image;
     }
 
-    public static TrayBadge Render(string text, UsageLevel level, int size)
+    /// <summary>
+    /// Codex, and either tool on its own, uses a rounded square in the warning colours. In Both mode Claude
+    /// uses a circle in its own shades, because Windows does not let apps choose the order of tray icons.
+    /// </summary>
+    public static TrayBadge Render(string text, UsageLevel level, int size, string provider = "Codex", bool both = false)
     {
         size = Math.Max(16, size);
         using var bitmap = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
@@ -33,14 +37,10 @@ internal sealed class TrayBadge : IDisposable
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             graphics.Clear(System.Drawing.Color.Transparent);
-            // Same colours as the widget's percentage text.
-            var fill = level switch
-            {
-                UsageLevel.Critical => System.Drawing.Color.FromArgb(255, 132, 132),
-                UsageLevel.Low => System.Drawing.Color.FromArgb(249, 198, 110),
-                _ => System.Drawing.Color.FromArgb(190, 240, 120)
-            };
-            using (var path = RoundedSquare(size, size / 4f))
+            // Same colours as the widget's bars.
+            var rgb = UsageColors.Bar(level, provider, both);
+            var fill = System.Drawing.Color.FromArgb(rgb.R, rgb.G, rgb.B);
+            using (var path = RoundedSquare(size, both && provider == "Claude" ? size / 2f : size / 4f))
             using (var brush = new SolidBrush(fill))
                 graphics.FillPath(brush, path);
             using var format = new StringFormat(StringFormat.GenericTypographic)

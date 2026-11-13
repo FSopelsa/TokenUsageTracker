@@ -13,6 +13,8 @@ A Windows WPF widget (`src/TokenUsageTracker`, `net10.0-windows`) that shows rem
 
 - Codex: `CodexClient.cs` (app-server JSON-RPC: `account/read`, `account/rateLimits/read`, and the Desktop proxy socket), `UsageReader.cs` (session logs), `ResumeController.cs` (auto-resume), `TaskHistory.cs` (local task ranking).
 - Claude Code: `ClaudeUsage.cs` is the status-line bridge. It writes `usage-widget/usage.json` under `CLAUDE_CONFIG_DIR` (default `~/.claude`) and sets a `statusLine` in the user's Claude `settings.json`.
+- Claude Code transcripts: `ClaudeTranscripts.cs` reads `projects/**/*.jsonl` for the Claude task list and usage-limit interruptions; `ClaudeResumeNotices.cs` decides when an interrupted session can continue (notify only, never runs `claude`).
+- Both tools: `WidgetSettings.Provider` is `Codex`, `Claude` or `Both`; `UsageColors.cs` holds the warning and Claude palettes. Window checks replace the `readLive`, `notices` and `notifyResume` fields so they never start Codex, touch real state or show notifications.
 - UI: `MainWindow.xaml`, `MainWindow*.cs`.
 - Taskbar and Start: `TaskbarReading.cs` (which number and colour to show; covered by the usage checks), `TrayBadge.cs` (draws the number icon), `WindowsShell.cs` (Start menu shortcut, `HKCU\...\Run` sign-in entry). Window checks must not call `WindowsShell` setters, because they change the real Start menu and registry.
 - Design notes: `docs/superpowers/specs/`.

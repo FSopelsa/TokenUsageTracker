@@ -29,6 +29,22 @@ public sealed record TaskbarReading(UsageLevel Level, double Fraction, string Ba
         return new(LevelOf(remaining), remaining / 100, ((int)Math.Floor(remaining)).ToString(CultureInfo.InvariantCulture));
     }
 
+    /// <summary>
+    /// The tool with the least room left, for the single taskbar button. Ties go to the earlier tool in
+    /// <paramref name="tools"/> (Codex is listed first). No usable window anywhere gives an empty provider.
+    /// </summary>
+    public static (string Provider, TaskbarReading Reading) Lowest(IEnumerable<(string Provider, UsageSnapshot? Snapshot)> tools, DateTimeOffset now)
+    {
+        (string Provider, TaskbarReading Reading) lowest = ("", Empty);
+        foreach (var (provider, snapshot) in tools)
+        {
+            var reading = From(snapshot, now);
+            if (reading.Level != UsageLevel.None && (lowest.Reading.Level == UsageLevel.None || reading.Fraction < lowest.Reading.Fraction))
+                lowest = (provider, reading);
+        }
+        return lowest;
+    }
+
     public static string TrayText(string provider, UsageSnapshot? snapshot, DateTimeOffset now, string age)
     {
         var parts = new List<string>();

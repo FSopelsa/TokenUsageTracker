@@ -105,6 +105,8 @@ await ResumeChecks.RunAsync(Check);
 await ClaudeChecks.RunAsync(Check);
 TaskHistoryChecks.Run(Check);
 TaskbarChecks.Run(Check);
+BothChecks.Run(Check);
+ClaudeTranscriptChecks.Run(Check);
 
 if (args.Contains("--live-rpc"))
 {

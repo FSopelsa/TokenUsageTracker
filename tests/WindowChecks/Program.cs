@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls.Primitives;
@@ -20,6 +21,11 @@ internal static class Program
         var window = new MainWindow();
         int checks = 0;
         object Field(string name) => typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        void SetField(string name, object? value) => typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(window, value);
+        // Claude notices keep state in LocalAppData; point them at a temporary file so the checks never touch the real one.
+        string noticeState = Path.Combine(Path.GetTempPath(), "WindowChecks-claude-resume-" + Guid.NewGuid() + ".json");
+        SetField("notices", new ClaudeResumeNotices(noticeState));
+        SetField("notifyResume", new Action<ClaudeInterruption>(_ => throw new Exception("Window checks must not show Claude notices")));
         void Call(string name, params object[] args) => typeof(MainWindow).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, args);
         void Check(bool condition, string message)
         {
@@ -66,7 +72,15 @@ internal static class Program
                 Rect content = Bounds("LayoutGrid");
                 var card = (System.Windows.Controls.Border)window.FindName("Card");
                 double visibleBottom = window.Height - card.Margin.Bottom - card.BorderThickness.Bottom - card.Padding.Bottom;
-                var names = new List<string> { "Header", "PrimaryLabel", "PrimaryValue", "PrimaryBar", "PrimaryReset", "SecondaryLabel", "SecondaryValue", "SecondaryBar", "SecondaryReset" };
+                bool Visible(string name) => ((FrameworkElement)window.FindName(name)).Visibility == Visibility.Visible;
+                var names = new List<string> { "Header", "PrimaryLabel", "PrimaryValue", "PrimaryBar", "SecondaryLabel", "SecondaryValue", "SecondaryBar" };
+                if (Visible("PrimaryReset")) names.AddRange(new[] { "PrimaryReset", "SecondaryReset" });
+                if (Visible("ClaudeBlock"))
+                {
+                    names.AddRange(new[] { "ClaudePrimaryLabel", "ClaudePrimaryValue", "ClaudePrimaryBar", "ClaudeSecondaryLabel", "ClaudeSecondaryValue", "ClaudeSecondaryBar" });
+                    if (Visible("ClaudePrimaryReset")) names.AddRange(new[] { "ClaudePrimaryReset", "ClaudeSecondaryReset" });
+                    if (Visible("ClaudePlanRow")) names.Add("ClaudePlanRow");
+                }
                 if (((FrameworkElement)window.FindName("TaskLists")).Visibility == Visibility.Visible)
                     names.AddRange(new[] { "TaskLists", "FiveHourTasks", "WeeklyTasks" });
                 if (((FrameworkElement)window.FindName("Footer")).Visibility == Visibility.Visible)
@@ -189,6 +203,62 @@ internal static class Program
                 Call("UpdateProvider");
                 Check(window.Title == "Codex Usage" && ((System.Windows.Controls.TextBlock)window.FindName("PrimaryValue")).Text == "—",
                     "Switching back to Codex clears the Claude balance immediately");
+
+                // Both tools. A fake Codex reader keeps the checks from starting Codex; an empty folder stands in for local sessions.
+                settings.CodexFolder = Path.Combine(claudeFolder, "codex-home");
+                LiveUsage FakeCodex() => new(new UsageSnapshot(DateTimeOffset.UtcNow, "plus",
+                    new UsageWindow(10, 300, DateTimeOffset.UtcNow.AddHours(3)), new UsageWindow(20, 10080, DateTimeOffset.UtcNow.AddDays(4))), null, true);
+                SetField("readLive", new Func<string, CancellationToken, Task<LiveUsage>>((_, _) => Task.FromResult(FakeCodex())));
+                ClaudeUsage.Capture(claudeInput, claudeFolder, DateTimeOffset.UtcNow);
+                T Find<T>(string name) => (T)window.FindName(name);
+                Color BrushColor(string name) => ((SolidColorBrush)(window.FindName(name) is System.Windows.Controls.ProgressBar bar ? bar.Foreground : Find<System.Windows.Controls.TextBlock>(name).Foreground)).Color;
+                settings.Provider = "Both";
+                settings.BothFullWidth = 440; settings.BothFullHeight = 400; settings.BothCompactWidth = 432; settings.BothCompactHeight = 170;
+                Call("SetCompact", false, false);
+                Call("UpdateProvider");
+                Check(window.Title == "Token Usage" && Find<System.Windows.Controls.TextBlock>("ProviderText").Text == "Codex + Claude"
+                    && Find<FrameworkElement>("ClaudeBlock").Visibility == Visibility.Visible,
+                    "Both mode shows Codex and Claude Code together");
+                Refresh();
+                Check(Find<System.Windows.Controls.ProgressBar>("PrimaryBar").Value == 90 && Find<System.Windows.Controls.ProgressBar>("SecondaryBar").Value == 80
+                    && Find<System.Windows.Controls.ProgressBar>("ClaudePrimaryBar").Value == 76.5 && Find<System.Windows.Controls.ProgressBar>("ClaudeSecondaryBar").Value == 58.8,
+                    "Both mode fills all four windows");
+                Check(BrushColor("PrimaryBar") != BrushColor("ClaudePrimaryBar") && BrushColor("PrimaryValue") == BrushColor("ClaudePrimaryValue"),
+                    "Codex and Claude bars differ while their percentage text shares the warning colour");
+                string IconText(string field) => (string)Field(field).GetType().GetProperty("Text")!.GetValue(Field(field))!;
+                Check(Field("claudeTray") is not null && Field("claudeBadge") is not null
+                    && IconText("tray").StartsWith("Codex:", StringComparison.Ordinal) && IconText("claudeTray").StartsWith("Claude:", StringComparison.Ordinal),
+                    "Both mode shows one tray number per tool");
+                Check(Math.Abs(window.TaskbarItemInfo.ProgressValue - 0.588) < 1e-9 && window.TaskbarItemInfo.Overlay is BitmapSource,
+                    "The taskbar follows the tool with less room left");
+                Render("window-both-full-default.png");
+                grip.RaiseEvent(new DragDeltaEventArgs(-10000, -10000) { RoutedEvent = Thumb.DragDeltaEvent });
+                Check(window.Width == 380 && window.Height == 370, "Full Both mode has its own usable minimum");
+                Render("window-both-full-minimum.png");
+                Call("SetCompact", true, false);
+                Check(window.Width == 432 && window.Height == 170, "Compact Both mode restores its own size");
+                Check(Find<System.Windows.Controls.TextBlock>("ClaudePrimaryLabel").Text.StartsWith("Claude", StringComparison.Ordinal)
+                    && Find<System.Windows.Controls.TextBlock>("PrimaryLabel").Text.StartsWith("Codex", StringComparison.Ordinal),
+                    "Compact Both labels name their tool");
+                Render("window-both-compact-default.png");
+                Check(Find<FrameworkElement>("Footer").Visibility == Visibility.Visible, "Compact Both mode shows the footer at its default size");
+                grip.RaiseEvent(new DragDeltaEventArgs(-10000, -10000) { RoutedEvent = Thumb.DragDeltaEvent });
+                Check(window.Width == 300 && window.Height == 150, "Compact Both mode has its own usable minimum");
+                Render("window-both-compact-minimum.png");
+                SetField("lastLive", null);
+                SetField("readLive", new Func<string, CancellationToken, Task<LiveUsage>>((_, _) => Task.FromException<LiveUsage>(new IOException("offline"))));
+                Refresh();
+                Check(Find<System.Windows.Controls.TextBlock>("PrimaryValue").Text == "—" && Find<System.Windows.Controls.ProgressBar>("ClaudePrimaryBar").Value == 76.5,
+                    "A failed Codex read leaves the Claude numbers in place");
+                SetField("readLive", new Func<string, CancellationToken, Task<LiveUsage>>((_, _) => Task.FromResult(FakeCodex())));
+                File.Delete(Path.Combine(claudeFolder, "usage-widget", "usage.json"));
+                Refresh();
+                Check(Find<System.Windows.Controls.TextBlock>("ClaudePrimaryValue").Text == "—" && Find<System.Windows.Controls.ProgressBar>("PrimaryBar").Value == 90,
+                    "Missing Claude data leaves the Codex numbers in place");
+                settings.Provider = "Codex";
+                Call("UpdateProvider");
+                Check(Field("claudeTray") is null && Find<FrameworkElement>("ClaudeBlock").Visibility == Visibility.Collapsed,
+                    "Leaving Both mode removes the Claude tray icon and section");
             }
             finally
             {
@@ -197,9 +267,9 @@ internal static class Program
                 if (Directory.Exists(claudeFolder)) Directory.Delete(claudeFolder, recursive: true);
             }
             var badgeType = typeof(MainWindow).Assembly.GetType("TokenUsageTracker.TrayBadge")!;
-            foreach (string text in new[] { "0", "58", "100" })
+            foreach (var (text, provider) in new[] { ("0", "Codex"), ("58", "Claude"), ("100", "Codex") })
             {
-                var rendered = (IDisposable)badgeType.GetMethod("Render")!.Invoke(null, new object[] { text, UsageLevel.Critical, 16 })!;
+                var rendered = (IDisposable)badgeType.GetMethod("Render")!.Invoke(null, new object[] { text, UsageLevel.Critical, 16, provider, true })!;
                 var image = (BitmapSource)badgeType.GetProperty("Image")!.GetValue(rendered)!;
                 Check(image.PixelWidth == 16 && image.PixelHeight == 16, $"Tray badge \"{text}\" renders at the small icon size");
                 if (text == "100")
@@ -222,7 +292,9 @@ internal static class Program
         finally
         {
             ((IDisposable)Field("tray")).Dispose();
+            (typeof(MainWindow).GetField("claudeTray", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window) as IDisposable)?.Dispose();
             ((IDisposable)Field("resume")).Dispose();
+            if (File.Exists(noticeState)) File.Delete(noticeState);
         }
     }
 }

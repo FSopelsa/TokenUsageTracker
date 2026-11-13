@@ -13,20 +13,53 @@ public sealed class WidgetSettings
     public bool AlwaysOnTop { get; set; } = true;
     public bool ShowInTaskbar { get; set; } = true;
     public bool CompactMode { get; set; }
+    /// <summary>"Codex", "Claude" or "Both".</summary>
     public string Provider { get; set; } = "Codex";
     public double? FullWidth { get; set; }
     public double? FullHeight { get; set; }
     public double? CompactWidth { get; set; }
     public double? CompactHeight { get; set; }
+    public double? BothFullWidth { get; set; }
+    public double? BothFullHeight { get; set; }
+    public double? BothCompactWidth { get; set; }
+    public double? BothCompactHeight { get; set; }
     public bool AutoResume { get; set; }
     public string ResumeTarget { get; set; } = "Desktop";
     public string? CodexFolder { get; set; }
+    public bool ClaudeResumeNotice { get; set; } = true;
 
-    public (double Width, double Height) WindowSize(bool compact)
+    [JsonIgnore] public bool Both => Provider == "Both";
+    [JsonIgnore] public bool ShowsCodex => Provider is "Codex" or "Both";
+    [JsonIgnore] public bool ShowsClaude => Provider is "Claude" or "Both";
+
+    /// <summary>Repairs values a hand-edited or older settings file may contain.</summary>
+    public void Normalize()
+    {
+        if (Provider is not ("Codex" or "Claude" or "Both")) Provider = "Codex";
+        if (ResumeTarget is not ("Desktop" or "CLI")) ResumeTarget = "Desktop";
+    }
+
+    public (double Width, double Height) WindowSize(bool compact) => WindowSize(compact, Both);
+
+    public (double Width, double Height) WindowSize(bool compact, bool both)
     {
         static double Valid(double? value, double fallback) => value is > 0 && double.IsFinite(value.Value) ? value.Value : fallback;
+        if (both)
+            return compact ? (Valid(BothCompactWidth, 432), Valid(BothCompactHeight, 170))
+                : (Valid(BothFullWidth, 440), Valid(BothFullHeight, 400));
         return compact ? (Valid(CompactWidth, 432), Valid(CompactHeight, 162))
             : (Valid(FullWidth, 316), Valid(FullHeight, 384));
+    }
+
+    public void RememberSize(bool compact, double width, double height)
+    {
+        if (Both)
+        {
+            if (compact) { BothCompactWidth = width; BothCompactHeight = height; }
+            else { BothFullWidth = width; BothFullHeight = height; }
+        }
+        else if (compact) { CompactWidth = width; CompactHeight = height; }
+        else { FullWidth = width; FullHeight = height; }
     }
 
     [JsonIgnore]
@@ -37,8 +70,11 @@ public sealed class WidgetSettings
     public static WidgetSettings Load()
     {
         AppData.MigrateLegacyFolder();
-        try { return JsonSerializer.Deserialize<WidgetSettings>(File.ReadAllText(FilePath)) ?? new(); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { return new(); }
+        WidgetSettings settings;
+        try { settings = JsonSerializer.Deserialize<WidgetSettings>(File.ReadAllText(FilePath)) ?? new(); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { settings = new(); }
+        settings.Normalize();
+        return settings;
     }
 
     public bool Save()

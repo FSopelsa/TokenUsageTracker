@@ -213,7 +213,7 @@ internal static class Program
                 T Find<T>(string name) => (T)window.FindName(name);
                 Color BrushColor(string name) => ((SolidColorBrush)(window.FindName(name) is System.Windows.Controls.ProgressBar bar ? bar.Foreground : Find<System.Windows.Controls.TextBlock>(name).Foreground)).Color;
                 settings.Provider = "Both";
-                settings.BothFullWidth = 440; settings.BothFullHeight = 400; settings.BothCompactWidth = 432; settings.BothCompactHeight = 170;
+                settings.BothFullWidth = 440; settings.BothFullHeight = 400; settings.BothCompactWidth = 432; settings.BothCompactHeight = 180;
                 Call("SetCompact", false, false);
                 Call("UpdateProvider");
                 Check(window.Title == "Token Usage" && Find<System.Windows.Controls.TextBlock>("ProviderText").Text == "Codex + Claude"
@@ -236,14 +236,14 @@ internal static class Program
                 Check(window.Width == 380 && window.Height == 370, "Full Both mode has its own usable minimum");
                 Render("window-both-full-minimum.png");
                 Call("SetCompact", true, false);
-                Check(window.Width == 432 && window.Height == 170, "Compact Both mode restores its own size");
+                Check(window.Width == 432 && window.Height == 180, "Compact Both mode restores its own size");
                 Check(Find<System.Windows.Controls.TextBlock>("ClaudePrimaryLabel").Text.StartsWith("Claude", StringComparison.Ordinal)
                     && Find<System.Windows.Controls.TextBlock>("PrimaryLabel").Text.StartsWith("Codex", StringComparison.Ordinal),
                     "Compact Both labels name their tool");
                 Render("window-both-compact-default.png");
                 Check(Find<FrameworkElement>("Footer").Visibility == Visibility.Visible, "Compact Both mode shows the footer at its default size");
                 grip.RaiseEvent(new DragDeltaEventArgs(-10000, -10000) { RoutedEvent = Thumb.DragDeltaEvent });
-                Check(window.Width == 300 && window.Height == 150, "Compact Both mode has its own usable minimum");
+                Check(window.Width == 300 && window.Height == 160, "Compact Both mode has its own usable minimum");
                 Render("window-both-compact-minimum.png");
                 SetField("lastLive", null);
                 SetField("readLive", new Func<string, CancellationToken, Task<LiveUsage>>((_, _) => Task.FromException<LiveUsage>(new IOException("offline"))));

@@ -2826,3 +2826,7 @@ git checkout prel/exciting-bohr-mdt58o
 **Verify:** `git log origin/main --oneline -1` shows the merge commit, and the GitHub Actions run on main is green.
 
 **Checkpoint:** If origin/main moved and the merge conflicts, resolve, rerun the usage checks and the app build, and push. Never force-push main.
+
+## Execution notes
+
+- Task 18, first CI run: the full Both minimum (380 × 370) clipped the footer. Below 420 px wide the cells stacked each percentage under its label, which adds about 15 px per tool. Full Both cells now keep the label and percentage on one line (`stacked = compact && narrow`). The same arithmetic showed compact Both would clip by a pixel or two, so its default height is now 180 (was 170), its minimum 300 × 160 (was 150) and its footer hides below 180.

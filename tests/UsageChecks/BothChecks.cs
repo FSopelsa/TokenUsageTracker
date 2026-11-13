@@ -11,7 +11,7 @@ internal static class BothChecks
         var unknown = JsonSerializer.Deserialize<WidgetSettings>("{\"Provider\":\"Gemini\",\"ResumeTarget\":\"Phone\"}")!;
         unknown.Normalize();
         check(unknown.Provider == "Codex" && unknown.ResumeTarget == "Desktop", "Unknown saved provider and resume target fall back to defaults");
-        check(both.WindowSize(true) == (432, 170) && both.WindowSize(false) == (440, 400)
+        check(both.WindowSize(true) == (432, 180) && both.WindowSize(false) == (440, 400)
             && both.WindowSize(true, both: false) == (432, 162) && both.WindowSize(false, both: false) == (316, 384),
             "Both mode has its own default sizes and leaves the single-tool defaults alone");
         both.RememberSize(compact: true, 500, 200);

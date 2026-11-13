@@ -45,7 +45,7 @@ public sealed class WidgetSettings
     {
         static double Valid(double? value, double fallback) => value is > 0 && double.IsFinite(value.Value) ? value.Value : fallback;
         if (both)
-            return compact ? (Valid(BothCompactWidth, 432), Valid(BothCompactHeight, 170))
+            return compact ? (Valid(BothCompactWidth, 432), Valid(BothCompactHeight, 180))
                 : (Valid(BothFullWidth, 440), Valid(BothFullHeight, 400));
         return compact ? (Valid(CompactWidth, 432), Valid(CompactHeight, 162))
             : (Valid(FullWidth, 316), Valid(FullHeight, 384));

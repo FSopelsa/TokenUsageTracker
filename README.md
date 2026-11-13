@@ -58,7 +58,7 @@ Select **⋯ → Usage provider → Codex and Claude Code** to see both tools in
 - The bars tell the tools apart. Codex bars keep the warning colours; Claude bars use their own shades of the same levels (mint, orange, rose).
 - Full-size mode shows reset times and pace forecasts. Compact mode shows only the percentages and bars, with the tool named in each label.
 - The footer shows how recent each tool's reading is. If one tool cannot be read, the other keeps its numbers.
-- This mode remembers its own window size, separate from the single-tool layouts. Full-size mode can shrink to 380 × 370 and compact mode to 300 × 150.
+- This mode remembers its own window size, separate from the single-tool layouts. Full-size mode can shrink to 380 × 370 and compact mode to 300 × 160.
 
 ### Taskbar and Start
 

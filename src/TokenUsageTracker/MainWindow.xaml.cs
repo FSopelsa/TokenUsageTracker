@@ -454,7 +454,7 @@ public partial class MainWindow : Window
         bool both = layoutBoth = settings.Both;
         bool sideBySide = compact || both;
         MinWidth = both ? compact ? 300 : 380 : compact ? 240 : 280;
-        MinHeight = both ? compact ? 150 : 370 : compact ? 120 : 384;
+        MinHeight = both ? compact ? 160 : 370 : compact ? 120 : 384;
         MaxWidth = Math.Max(MinWidth, SystemParameters.VirtualScreenWidth);
         MaxHeight = Math.Max(MinHeight, SystemParameters.VirtualScreenHeight);
         var size = settings.WindowSize(compact);
@@ -504,10 +504,11 @@ public partial class MainWindow : Window
         TaskLists.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         FiveHourTasks.IsEnabled = WeeklyTasks.IsEnabled = true;
         bool narrow = Width < (both ? compact ? 380 : 420 : compact ? 360 : 310);
-        bool stacked = (compact || both) && narrow;
+        // Only compact cells are narrow enough to need the percentage under its label; full Both cells keep them on one line.
+        bool stacked = compact && narrow;
         AutoResumeToggle.Visibility = narrow || settings.Provider == "Claude" ? Visibility.Collapsed : Visibility.Visible;
         PinButton.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
-        Footer.Visibility = compact && Height < (both ? 165 : 160) ? Visibility.Collapsed : Visibility.Visible;
+        Footer.Visibility = compact && Height < (both ? 180 : 160) ? Visibility.Collapsed : Visibility.Visible;
         foreach (var cell in mainCells.Concat(claudeCells))
         {
             cell.Heading.RowDefinitions[1].Height = stacked ? GridLength.Auto : new GridLength(0);

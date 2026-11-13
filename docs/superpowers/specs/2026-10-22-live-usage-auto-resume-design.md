@@ -70,7 +70,7 @@ Use process arguments rather than composing an executable shell command from tra
 
 ## Persistence and lifetime
 
-Store settings and a small, atomically written pending-state JSON file under `%LOCALAPPDATA%\CodexUsageWidget`, outside the repository. Persist identifiers and recovery metadata, not credentials, prompts, or chat transcripts.
+Store settings and a small, atomically written pending-state JSON file under `%LOCALAPPDATA%\TokenUsageTracker`, outside the repository. Persist identifiers and recovery metadata, not credentials, prompts, or chat transcripts.
 
 Reuse the existing single-instance widget guard. Save the in-flight marker before dispatch. After a crash or ambiguous acknowledgement, reconcile the chat's later turns; if delivery cannot be established, require manual attention rather than risk a duplicate continuation.
 

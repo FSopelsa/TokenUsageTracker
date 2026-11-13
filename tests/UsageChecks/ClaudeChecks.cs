@@ -45,12 +45,47 @@ internal static class ClaudeChecks
                 "A status line without rate limits, such as before the first reply, leaves the saved reading unchanged");
             ClaudeUsage.Capture("{\"rate_limits\":{\"five_hour\":{\"used_percentage\":\"x\"}}}", root, now.AddMinutes(2));
             check(File.ReadAllText(cache) == before, "An invalid windowless update keeps the last good reading");
+            ClaudeUsage.Capture("{}", root, now.AddMinutes(1));
+            check(ClaudeUsage.Read(root).Snapshot is { Primary.Remaining: 76.5 } kept && kept.Timestamp == now,
+                "A new Claude session without reported limits keeps the last allowance and its reading time");
+            ClaudeUsage.Capture(input.Replace("23.5", "10"), root, now.AddMinutes(2));
+            check(ClaudeUsage.Read(root).Snapshot is { Primary.Remaining: 76.5 } higher && higher.Timestamp == now,
+                "An idle session's lower usage for the same window cannot replace a newer reading or refresh its age");
+            ClaudeUsage.Capture(input.Replace("23.5", "30"), root, now.AddMinutes(3));
+            check(ClaudeUsage.Read(root).Snapshot is { Primary.Remaining: 70 } rose && rose.Timestamp == now.AddMinutes(3),
+                "Higher usage for the same window updates the reading and its age");
+            ClaudeUsage.Capture(input.Replace("23.5", "5").Replace("1893456000", "1893474000"), root, now.AddMinutes(4));
+            check(ClaudeUsage.Read(root).Snapshot?.Primary is { Remaining: 95 } next && next.ResetsAt == DateTimeOffset.FromUnixTimeSeconds(1893474000),
+                "A new window replaces the stored window even with lower usage");
+            var expired = new UsageWindow(50, 300, now.AddMinutes(-1));
+            check(ClaudeUsage.Merge(null, expired, now) is null, "An absent window does not keep a window whose reset has passed");
+
+            using (var cached = JsonDocument.Parse("""{"prompt_cache":{"expires_at":1893456000,"recache_tokens_if_cold":183402,"misses":3}}"""))
+                check(ClaudeUsage.Parse(cached.RootElement, now).Cache is { RecacheTokens: 183402 } c && c.ExpiresAt == DateTimeOffset.FromUnixTimeSeconds(1893456000),
+                    "Claude prompt-cache expiry and re-cache size are read from the status line");
+            foreach (string bad in new[] { """{"expires_at":-5}""", """{"expires_at":"soon"}""", """{"recache_tokens_if_cold":-1}""", """{"expires_at":null,"recache_tokens_if_cold":1.5}""", "[]" })
+            {
+                using var invalid = JsonDocument.Parse("{\"prompt_cache\":" + bad + "}");
+                check(ClaudeUsage.Parse(invalid.RootElement, now).Cache is null, "Invalid prompt-cache data is not displayed: " + bad);
+            }
+            var cacheNow = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
+            check(new PromptCache(cacheNow.AddSeconds(170), 183402).Describe(cacheNow) == "Cache cold in 3m · re-cache ~183k tokens"
+                && new PromptCache(cacheNow.AddSeconds(5), null).Describe(cacheNow) == "Cache cold in 1m"
+                && new PromptCache(cacheNow.AddSeconds(-5), 950).Describe(cacheNow) == "Cache cold · next prompt re-caches ~950 tokens"
+                && new PromptCache(null, 183402).Describe(cacheNow) == "Cache cold · next prompt re-caches ~183k tokens",
+                "Prompt-cache text counts down while warm and states the re-cache cost once cold");
+            ClaudeUsage.Capture("""{"prompt_cache":{"expires_at":1893456000,"recache_tokens_if_cold":183402}}""", root, now.AddMinutes(5));
+            ClaudeUsage.Capture("{}", root, now.AddMinutes(6));
+            check(ClaudeUsage.Read(root).Snapshot is { Cache.RecacheTokens: 183402, Primary.Remaining: 95 },
+                "Prompt-cache data and allowances survive a session start that reports neither");
+
             ClaudeUsage.Capture("""{"rate_limits":{"seven_day":{"used_percentage":41.2,"resets_at":1894060800}}}""", root, now.AddMinutes(3));
             check(ClaudeUsage.Read(root).Snapshot is { Primary: null, Secondary.Remaining: 58.8 },
                 "A fresh update without a five-hour window does not revive the older five-hour allowance");
-            ClaudeUsage.Capture("""{"rate_limits_available":false}""", root, now.AddMinutes(4));
-            check(ClaudeUsage.Read(root).Snapshot is null, "Unavailable subscription limits clear a cached reading");
+            ClaudeUsage.Capture("""{"rate_limits_available":false,"prompt_cache":{"recache_tokens_if_cold":1}}""", root, now.AddMinutes(4));
+            check(ClaudeUsage.Read(root).Snapshot is null, "Unavailable subscription limits clear a cached reading even with prompt-cache data");
             check(!Directory.EnumerateFiles(Path.Combine(root, "usage-widget"), "*.tmp").Any(), "Snapshot writes leave no temporary files behind");
+            File.Delete(cache);
             ClaudeUsage.Capture(input, root, now);
             try { ClaudeUsage.Capture("{", root, now); } catch (JsonException) { }
             check(ClaudeUsage.Read(root).Snapshot?.Primary?.Remaining == 76.5, "Malformed status-line input cannot corrupt a complete cached reading");
@@ -97,6 +132,20 @@ internal static class ClaudeChecks
             try { ClaudeUsage.ConfigureStatusLine(root, executable); } catch (JsonException) { }
             check(File.ReadAllText(config) == "{", "Claude setup never overwrites malformed settings");
             check(new WidgetSettings().Provider == "Codex", "Existing widget settings continue to select Codex by default");
+
+            string localData = Path.Combine(root, "local-app-data");
+            string legacyDir = Path.Combine(localData, AppData.LegacyFolderName);
+            Directory.CreateDirectory(legacyDir);
+            File.WriteAllText(Path.Combine(legacyDir, "settings.json"), "{\"CompactMode\":true}");
+            check(AppData.MigrateLegacyFolder(localData)
+                && File.ReadAllText(Path.Combine(AppData.Folder(localData), "settings.json")) == "{\"CompactMode\":true}"
+                && !Directory.Exists(legacyDir), "The pre-rename settings folder moves to the new name on first launch");
+            check(!AppData.MigrateLegacyFolder(localData), "Migration does nothing once the new folder exists");
+            Directory.CreateDirectory(legacyDir);
+            File.WriteAllText(Path.Combine(legacyDir, "settings.json"), "{\"CompactMode\":false}");
+            check(!AppData.MigrateLegacyFolder(localData)
+                && File.ReadAllText(Path.Combine(AppData.Folder(localData), "settings.json")) == "{\"CompactMode\":true}"
+                && File.Exists(Path.Combine(legacyDir, "settings.json")), "An existing new folder wins and the old one is left untouched");
 
             if (OperatingSystem.IsWindows())
             {

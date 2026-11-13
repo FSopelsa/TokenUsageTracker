@@ -19,9 +19,9 @@ public partial class App : Application
             Shutdown(ClaudeUsage.RunStatusLine(Console.In, Console.Out, Console.Error, ClaudeUsage.ConfigFolder));
             return;
         }
-        instance = new Mutex(true, @"Local\CodexUsageWidget", out bool first);
+        instance = new Mutex(true, @"Local\TokenUsageTracker", out bool first);
         // A second launch (Start menu, pinned taskbar button, sign-in entry) brings the running widget forward.
-        showRequest = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\CodexUsageWidget.Show");
+        showRequest = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\TokenUsageTracker.Show");
         if (!first)
         {
             WindowsShell.AllowSetForegroundWindow(WindowsShell.ASFW_ANY);

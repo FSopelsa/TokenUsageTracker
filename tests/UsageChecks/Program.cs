@@ -65,6 +65,17 @@ foreach (string line in new[] { "{\"rate_limits\":", "[]", "null", "{\"type\":\"
     _ = UsageReader.ParseLine(line);
 Check(true, "Partial writes, unrelated messages, and invalid field types do not crash the reader");
 
+var paceAt = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
+UsageWindow Pace(double used, int? minutes = 300, double resetInMinutes = 150) => new(used, minutes, paceAt.AddMinutes(resetInMinutes));
+Check(Pace(60).RunsOutAt(paceAt) == paceAt.AddMinutes(100), "Average pace since the window opened forecasts when it runs out before reset");
+Check(Pace(30).RunsOutAt(paceAt) is null, "No forecast when the average pace lasts until reset");
+Check(Pace(double.Epsilon).RunsOutAt(paceAt) is null, "Tiny valid usage percentages cannot overflow the forecast");
+Check(Pace(5, resetInMinutes: 290).RunsOutAt(paceAt) is null, "No forecast this early in a window");
+Check(Pace(0).RunsOutAt(paceAt) is null && Pace(100).RunsOutAt(paceAt) is null, "Unused and exhausted windows get no forecast");
+Check(Pace(60, minutes: null).RunsOutAt(paceAt) is null && Pace(60, resetInMinutes: -1).RunsOutAt(paceAt) is null
+    && new UsageWindow(60, 300, null).RunsOutAt(paceAt) is null, "Missing window lengths, missing resets and passed resets get no forecast");
+Check(Pace(60, resetInMinutes: 400).RunsOutAt(paceAt) is null, "A reset further away than the window length is not extrapolated");
+
 string root = Path.Combine(Path.GetTempPath(), "CodexUsageChecks-" + Guid.NewGuid());
 try
 {

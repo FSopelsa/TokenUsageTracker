@@ -14,10 +14,10 @@ namespace TokenUsageTracker;
 internal static class WindowsShell
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string RunValue = "CodexUsageWidget";
+    private const string RunValue = "TokenUsageTracker";
 
     public static string StartMenuShortcut => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Codex Usage Widget.lnk");
+        Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Token Usage Tracker.lnk");
 
     public static bool HasStartMenuShortcut(string exe) =>
         File.Exists(StartMenuShortcut) && SamePath(ShortcutTarget(StartMenuShortcut), exe);

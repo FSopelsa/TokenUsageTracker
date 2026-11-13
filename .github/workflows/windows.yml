@@ -15,5 +15,5 @@ jobs:
         run: ./scripts/Build.ps1
       - uses: actions/upload-artifact@v4
         with:
-          name: CodexUsageWidget-win-x64
-          path: dist/CodexUsageWidget.exe
+          name: TokenUsageTracker-win-x64
+          path: dist/TokenUsageTracker.exe
